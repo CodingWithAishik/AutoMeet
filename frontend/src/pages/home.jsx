@@ -9,7 +9,6 @@ const Home = () => {
   const { user } = useContext(UserDataContext); // Fetch user data from context
   const [notifications, setNotifications] = useState([]);
   const [showNotis, setShowNotis] = useState(false);
-  // Removed userCommittees, errorMessage, loading state as 'Your Committees' section is removed
 
   // Fetch notifications from API
   const fetchNotifications = async () => {
@@ -34,12 +33,7 @@ const Home = () => {
     setShowNotis(!showNotis);
     // Optionally, mark all as read here
   };
-  const [notifications, setNotifications] = useState(5); // Initial notification count
-  const [showNotis, setShowNotis] = useState(false);
-  const handleClick = () => {
-    setNotifications(0);
-    setShowNotis(true);
-  };
+  // Removed userCommittees, errorMessage, loading state as 'Your Committees' section is removed
 
   // Removed useEffect for fetching user committees as 'Your Committees' section is removed
 
