@@ -28,7 +28,7 @@ function CommitteeDashboard() {
     const [suggestionBoxIndex, setSuggestionBoxIndex] = useState(null);
     const [suggestionText, setSuggestionText] = useState("");
     const [showSuggestions, setShowSuggestions] = useState(false);
-    const [suggestions, setSuggestions] = useState([]);
+    const [suggestions] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
     // Determine the user's role for this committee
@@ -319,61 +319,7 @@ function CommitteeDashboard() {
         }
     };
 
-    const handleViewSuggestions = async () => {
-        setShowSuggestions((prev) => !prev);
-        if (!showSuggestions) {
-            setLoadingSuggestions(true);
-            try {
-                const token = localStorage.getItem('token');
-                // Fetch all meetings for this committee
-                const response = await axios.get(
-                    `${import.meta.env.VITE_BASE_URL}/api/minutes/committee/${id}`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        }
-                    }
-                );
-                const meetings = response.data || [];
-                // Fetch suggestions for each meeting
-                const allSuggestions = [];
-                for (const meeting of meetings) {
-                    if (!meeting._id) continue;
-                    const sugRes = await axios.get(
-                        `${import.meta.env.VITE_BASE_URL}/api/minutes/${meeting._id}/suggestions`,
-                        {
-                            headers: {
-                                Authorization: `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            }
-                        }
-                    );
-                    const suggestionsForMeeting = (sugRes.data || []).map(s => ({
-                        ...s,
-                        meetingTopic: meeting.topic,
-                        meetingDate: meeting.date,
-                    }));
-                    allSuggestions.push(...suggestionsForMeeting);
-                }
-                setSuggestions(allSuggestions);
-            } catch {
-                setSuggestions([]);
-            } finally {
-                setLoadingSuggestions(false);
-            }
-        }
-    };
 
-    const handleEditMoM = (meeting) => {
-        // Find the index of the meeting in recentMeetings
-        const index = recentMeetings.findIndex(m => m._id === meeting._id);
-        if (index !== -1) {
-            setSelectedMeetingIndex(index);
-            setEditedMinutes(meeting.minutesText);
-            setShowMinutes(true);
-        }
-    };
 
     // For convener: suggestions grouped by MoM
     const [momSuggestions, setMomSuggestions] = useState([]);
