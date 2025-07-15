@@ -1,77 +1,152 @@
 const Committee = require('../models/committee.model');
-const mongoose = require('mongoose');
-const { sendNotification } = require('../controllers/minutes.controller');
-const { getUserIdsByEmails } = require('./user.controller');
+const User = require('../models/user.model');
+const Notification = require('../models/notification.model');
 
+// Admin creates a committee with only a chairman
 exports.createCommittee = async (req, res) => {
     try {
-        console.log('createCommittee: called with body:', req.body);
-        const { committeeName, committeePurpose, chairman, convener, members } = req.body;
-        
-        // Validate required fields
-        if (!committeeName || !committeePurpose || !chairman || !convener) {
-            return res.status(400).json({ 
-                message: 'Missing required fields',
-                required: ['committeeName', 'committeePurpose', 'chairman', 'convener']
-            });
-        }
+        const { name, chairmanId } = req.body;
+        const adminId = req.user.id;
 
-        // Ensure userId is present for chairman, convener, and all members
-        if (!chairman.userId || !convener.userId || members.some(m => !m.userId)) {
-            return res.status(400).json({
-                message: 'userId is required for chairman, convener, and all members',
-                chairmanUserId: chairman.userId,
-                convenerUserId: convener.userId,
-                memberUserIds: members.map(m => m.userId)
-            });
+        if (!name || !chairmanId) {
+            return res.status(400).json({ message: 'Committee name and chairman are required.' });
         }
 
         const committee = new Committee({
-            committeeName, 
-            committeePurpose, 
-            chairman: {
-                userId: chairman.userId,
-                name: chairman.name,
-                email: chairman.email
-            }, 
-            convener: {
-                userId: convener.userId,
-                name: convener.name,
-                email: convener.email
-            }, 
-            members: members.map(member => ({
-                userId: member.userId,
-                name: member.name,
-                email: member.email,
-                role: member.role || 'member'
-            }))
+            name,
+            chairman: chairmanId,
+            createdBy: adminId,
+            approvalStatus: 'pending_chairman_suggestion'
         });
 
         await committee.save();
 
-        // Try notification delivery, but do not fail committee creation if notification fails
-        try {
-            console.log('createCommittee: preparing to notify members');
-            const allMemberEmails = [chairman.email, convener.email, ...members.map(m => m.email)];
-            console.log('createCommittee: allMemberEmails:', allMemberEmails);
-            const userIds = await getUserIdsByEmails(allMemberEmails);
-            console.log('createCommittee: userIds from emails:', userIds);
-            const message = `You have been added to the committee: ${committee.committeeName}`;
-            const link = `/committeeDashboard/${committee._id}`;
-            console.log('createCommittee: calling sendNotification');
-            await sendNotification(userIds, message, link);
-            console.log('createCommittee: sendNotification completed');
-        } catch (notifyErr) {
-            console.error('Notification delivery failed:', notifyErr);
-            // Optionally, you could log this to a DB or monitoring service
-        }
+        // Notify the chairman
+        const notification = new Notification({
+            user: chairmanId,
+            message: `You have been appointed as Chairman for the committee: ${name}. Please suggest a convener and members.`,
+            link: `/committee/${committee._id}`
+        });
+        await notification.save();
+
         res.status(201).json(committee);
     } catch (error) {
-        console.error('Committee creation error:', error);
-        res.status(400).json({ 
-            message: 'Error creating committee',
-            error: error.message 
+        res.status(500).json({ message: 'Error creating committee', error: error.message });
+    }
+};
+
+// Chairman suggests convener and members
+exports.suggestCommitteeMembers = async (req, res) => {
+    try {
+        const { committeeId } = req.params;
+        const { suggestedConvener, suggestedMembers } = req.body;
+        const chairmanId = req.user.id;
+
+        const committee = await Committee.findById(committeeId);
+
+        if (!committee) {
+            return res.status(404).json({ message: 'Committee not found' });
+        }
+
+        if (committee.chairman.toString() !== chairmanId) {
+            return res.status(403).json({ message: 'Only the chairman can suggest members.' });
+        }
+
+        committee.suggestedConvener = suggestedConvener;
+        committee.suggestedMembers = suggestedMembers;
+        committee.approvalStatus = 'pending_admin_approval';
+        committee.rejectionComment = undefined;
+
+        await committee.save();
+
+        // Notify the admin
+        const adminId = committee.createdBy;
+        const notification = new Notification({
+            user: adminId,
+            message: `The chairman of committee "${committee.name}" has suggested members for approval.`,
+            link: `/committee/${committee._id}`
         });
+        await notification.save();
+
+        res.status(200).json(committee);
+    } catch (error) {
+        res.status(500).json({ message: 'Error suggesting members', error: error.message });
+    }
+};
+
+// Admin approves suggested members
+exports.approveCommitteeMembers = async (req, res) => {
+    try {
+        const { committeeId } = req.params;
+        const adminId = req.user.id;
+
+        const committee = await Committee.findById(committeeId);
+
+        if (!committee) {
+            return res.status(404).json({ message: 'Committee not found' });
+        }
+
+        if (committee.createdBy.toString() !== adminId) {
+            return res.status(403).json({ message: 'Only the creating admin can approve members.' });
+        }
+
+        committee.convener = committee.suggestedConvener;
+        committee.members = committee.suggestedMembers;
+        committee.approvalStatus = 'approved';
+        committee.suggestedConvener = undefined;
+        committee.suggestedMembers = [];
+
+        await committee.save();
+
+        // Notify the chairman
+        const notification = new Notification({
+            user: committee.chairman,
+            message: `The members you suggested for committee "${committee.name}" have been approved.`,
+            link: `/committee/${committee._id}`
+        });
+        await notification.save();
+
+        res.status(200).json(committee);
+    } catch (error) {
+        res.status(500).json({ message: 'Error approving members', error: error.message });
+    }
+};
+
+// Admin rejects suggested members
+exports.rejectCommitteeMembers = async (req, res) => {
+    try {
+        const { committeeId } = req.params;
+        const { rejectionComment } = req.body;
+        const adminId = req.user.id;
+
+        const committee = await Committee.findById(committeeId);
+
+        if (!committee) {
+            return res.status(404).json({ message: 'Committee not found' });
+        }
+
+        if (committee.createdBy.toString() !== adminId) {
+            return res.status(403).json({ message: 'Only the creating admin can reject members.' });
+        }
+
+        committee.approvalStatus = 'rejected_by_admin';
+        committee.rejectionComment = rejectionComment;
+        committee.suggestedConvener = undefined;
+        committee.suggestedMembers = [];
+
+        await committee.save();
+
+        // Notify the chairman
+        const notification = new Notification({
+            user: committee.chairman,
+            message: `The members you suggested for committee "${committee.name}" were not approved. Reason: ${rejectionComment}`,
+            link: `/committee/${committee._id}`
+        });
+        await notification.save();
+
+        res.status(200).json(committee);
+    } catch (error) {
+        res.status(500).json({ message: 'Error rejecting members', error: error.message });
     }
 };
 

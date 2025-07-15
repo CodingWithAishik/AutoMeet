@@ -16,13 +16,11 @@ module.exports.authUser = async (req, res, next) => {
             return res.status(401).json({ message: 'User not found' });
         }
 
-        console.log('Authenticated user:', {
+        req.user = {
             id: user._id,
             status: user.status,
             email: user.email
-        });
-
-        req.user = user;
+        };
         next();
     } catch (err) {
         console.error('Auth error:', err);
@@ -31,27 +29,9 @@ module.exports.authUser = async (req, res, next) => {
 };
 
 module.exports.isAdmin = async (req, res, next) => {
-    try {
-        console.log('User in request:', req.user);
-        console.log('User status:', req.user?.status);
-
-        if (!req.user || !req.user.status) {
-            return res.status(403).json({ 
-                message: 'Access denied - No user or status found',
-                debug: { hasUser: !!req.user, status: req.user?.status }
-            });
-        }
-
-        if (req.user.status !== 'admin') {
-            return res.status(403).json({ 
-                message: 'Admin rights required',
-                debug: { currentRole: req.user.status }
-            });
-        }
-
+    if (req.user && req.user.status === 'admin') {
         next();
-    } catch (error) {
-        console.error('Admin authorization error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+    } else {
+        res.status(403).json({ message: 'Admin access required.' });
     }
 };

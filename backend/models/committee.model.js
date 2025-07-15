@@ -24,22 +24,46 @@ const upcomingMeetingSchema = new mongoose.Schema({
 
 // Define the main committee schema
 const committeeSchema = new mongoose.Schema({
-    committeeName: { type: String, required: true },
-    committeePurpose: { type: String, required: true },
-    chairman: { 
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user', required: true },
-        name: { type: String, required: true },
-        email: { type: String, required: true }
+    name: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    chairman: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
     convener: {
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user', required: true },
-        name: { type: String, required: true },
-        email: { type: String, required: true }
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
     },
-    members: [memberSchema],
-    pastMeetings: [pastMeetingSchema], // Optional array of past meetings
-    upcomingMeetings: [upcomingMeetingSchema] // Optional array of upcoming meetings
-});
+    members: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    suggestedConvener: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    suggestedMembers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    approvalStatus: {
+        type: String,
+        enum: ['pending_chairman_suggestion', 'pending_admin_approval', 'approved', 'rejected_by_admin'],
+        default: 'pending_chairman_suggestion'
+    },
+    rejectionComment: {
+        type: String
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    }
+}, { timestamps: true });
 
 // Create and export the Committee model
 module.exports = mongoose.model('Committee', committeeSchema);

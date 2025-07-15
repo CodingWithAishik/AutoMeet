@@ -16,6 +16,8 @@ import ManageUsers from "./pages/ManageUsers.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import UserContext from "./context/UserContext.jsx";
 import PrivateRoute from "./components/PrivateRoute.jsx";
+import SuggestMembers from "./pages/SuggestMembers.jsx";
+import ApproveMembers from "./pages/ApproveMembers.jsx";
 
 const App = () => {
   return (
@@ -35,6 +37,8 @@ const App = () => {
           <Route path="/committeeDashboard" element={<CommitteeDashboard />} />
           <Route path="/manage-users" element={<ManageUsers />} />
           <Route path="/committeeDashboard/:id" element={<CommitteeDashboard />} />
+          <Route path="/committee/:committeeId/suggest-members" element={<SuggestMembers />} />
+          <Route path="/committee/:committeeId/approve-members" element={<ApproveMembers />} />
 
           <Route path="/home" element={
             <UserProtectWrapper>

@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { UserDataContext } from '../context/UserDataContext';
 
@@ -9,12 +9,13 @@ const Home = () => {
   const { user } = useContext(UserDataContext); // Fetch user data from context
   const [notifications, setNotifications] = useState([]);
   const [showNotis, setShowNotis] = useState(false);
+  const navigate = useNavigate();
 
   // Fetch notifications from API
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('token'); // Fetch token from localStorage
-      const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/notifications`, {
+      const response = await axios.get(`/api/notifications`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -29,9 +30,13 @@ const Home = () => {
     fetchNotifications();
   }, []);
 
-  const handleNotificationClick = () => {
-    setShowNotis(!showNotis);
-    // Optionally, mark all as read here
+  const handleNotificationClick = (notification) => {
+    // Mark notification as read
+    axios.put(`/api/notifications/${notification._id}/read`, {}, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    });
+    // Navigate to the link
+    navigate(notification.link);
   };
   // Removed userCommittees, errorMessage, loading state as 'Your Committees' section is removed
 
@@ -94,61 +99,28 @@ const Home = () => {
 
             {/* Notifications Section */}
             <div className={styles.noti}>
-              <button onClick={handleNotificationClick}>
+              <button onClick={() => setShowNotis(!showNotis)}>
                 <img src="/assets/noti.png" alt="Notifications" />
                 {notifications.filter(n => !n.isRead).length > 0 && (
                   <span className={styles.notiCount}>{notifications.filter(n => !n.isRead).length}</span>
                 )}
               </button>
+              {showNotis && (
+                <div className={styles.notiDropdown}>
+                  {notifications.map(n => (
+                    <div key={n._id} onClick={() => handleNotificationClick(n)}>
+                      {n.message}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Notifications */}
-
-          {showNotis && (
-            <section className={styles.notifications}>
-              <button
-                type="button"
-                className={styles.closebtn}
-                onClick={() => setShowNotis(false)}
-              >
-                x
-              </button>
-              <h2>Notifications</h2>
-              <ul>
-                {notifications.length === 0 && <li>No notifications.</li>}
-                {notifications.map((noti) => (
-                  <li key={noti._id} style={{ fontWeight: noti.isRead ? 'normal' : 'bold' }}>
-                    {noti.link ? (
-                      <Link
-                        to={noti.link}
-                        onClick={async () => {
-                          if (!noti.isRead) {
-                            try {
-                              const token = localStorage.getItem('token');
-                              await axios.put(`${import.meta.env.VITE_BASE_URL}/api/notifications/${noti._id}/read`, {}, {
-                                headers: { Authorization: `Bearer ${token}` }
-                              });
-                              setNotifications((prev) => prev.map(n => n._id === noti._id ? { ...n, isRead: true } : n));
-                            } catch {
-                              // Optionally handle error
-                            }
-                          }
-                        }}
-                      >
-                        {noti.message}
-                      </Link>
-                    ) : (
-                      noti.message
-                    )}
-                    <span style={{ marginLeft: 8, fontSize: 10, color: '#888' }}>{new Date(noti.createdAt).toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {/* User's Committees section removed as requested */}
+          {/* Main Section */}
+          <div className={styles.mainSection}>
+            {/* Content for the main section can be added here */}
+          </div>
         </div>
       </div>
     </div>
