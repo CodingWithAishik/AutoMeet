@@ -31,12 +31,25 @@ const committeeSchema = new mongoose.Schema({
         name: { type: String, required: true },
         email: { type: String, required: true }
     },
+    // Only set after admin approval
     convener: {
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user', required: true },
-        name: { type: String, required: true },
-        email: { type: String, required: true }
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user' },
+        name: { type: String },
+        email: { type: String }
     },
+    // Only set after admin approval
     members: [memberSchema],
+    // Chairman's suggestions (pending approval)
+    suggestedConvener: {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user' },
+        name: { type: String },
+        email: { type: String }
+    },
+    suggestedMembers: [memberSchema],
+    // Status: pending_suggestions, pending_approval, formed, rejected
+    status: { type: String, enum: ['pending_suggestions', 'pending_approval', 'formed', 'rejected'], default: 'pending_suggestions' },
+    // Admin's comment if rejected
+    adminComment: { type: String },
     pastMeetings: [pastMeetingSchema], // Optional array of past meetings
     upcomingMeetings: [upcomingMeetingSchema] // Optional array of upcoming meetings
 });

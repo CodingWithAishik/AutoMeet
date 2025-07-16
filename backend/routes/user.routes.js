@@ -29,7 +29,22 @@ router.put('/update-role/:id', authMiddleware.authUser, authMiddleware.isAdmin, 
     body('role').isIn(['member', 'admin', 'chairman', 'convenor']).withMessage('Invalid role')
 ], userController.updateUserRole);
 
-router.get('/users', [authMiddleware.authUser, authMiddleware.isAdmin], userController.getAllUsers);
+// Allow both admin and chairman to access all users
+router.get('/users', authMiddleware.authUser, (req, res, next) => {
+    if (req.user.status === 'admin') return next();
+    // Allow chairman to access all users for committee suggestions
+    // Check if user is chairman in any committee
+    const Committee = require('../models/committee.model');
+    Committee.findOne({ 'chairman.userId': req.user._id })
+        .then(committee => {
+            if (committee) return next();
+            return res.status(403).json({ message: 'Access denied' });
+        })
+        .catch(err => {
+            console.error('Error checking chairman role:', err);
+            return res.status(500).json({ message: 'Server error' });
+        });
+}, userController.getAllUsers);
 
 router.get('/username', authMiddleware.authUser, userController.getUserNames);
 

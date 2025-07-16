@@ -8,6 +8,11 @@ const committeeRoleActions = require('../controllers/committeeRoleActions.contro
 router.use(authUser);
 
 router.post('/create', committeeController.createCommittee);
+// Chairman suggests convener and members
+router.post('/:id/suggest-people', committeeController.suggestPeople);
+
+// Admin approves or rejects suggestions
+router.post('/:id/approve-suggestions', committeeController.approveSuggestions);
 router.get('/user', committeeController.getCommitteesForUser); // <-- moved above /:id
 router.get('/', committeeController.getCommittees);
 router.get('/:id', 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "../styles/committee.css";
 import { UserDataContext } from '../context/UserDataContext';
@@ -12,13 +13,12 @@ const CommitteeApp = () => {
   const [formData, setFormData] = useState({
     committeeName: "",
     committeePurpose: "",
-    chairman: { name: "", email: "" },
-    convener: { name: "", email: "" },
-    members: []
+    chairman: { name: "", email: "" }
   });
   const [committees, setCommittees] = useState([]);
   const [users, setUsers] = useState([]);
   const { user } = useContext(UserDataContext);
+  const navigate = useNavigate();
 
 
   useEffect(() => {
@@ -79,74 +79,50 @@ const CommitteeApp = () => {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     try {
-        // Validate form data
-        if (!formData.committeeName || !formData.committeePurpose || 
-            !formData.chairman.email || !formData.convener.email) {
-            throw new Error('Please fill all required fields');
+      if (!formData.committeeName || !formData.committeePurpose || !formData.chairman.email) {
+        throw new Error('Please fill all required fields');
+      }
+      const chairmanUser = users.find(u => u.email === formData.chairman.email);
+      if (!chairmanUser) {
+        throw new Error('Chairman user not found');
+      }
+      const payload = {
+        committeeName: formData.committeeName,
+        committeePurpose: formData.committeePurpose,
+        chairman: {
+          userId: chairmanUser._id,
+          name: formData.chairman.name,
+          email: formData.chairman.email,
         }
-
-        // Find userId for chairman and convener
-        const chairmanUser = users.find(u => u.email === formData.chairman.email);
-        const convenerUser = users.find(u => u.email === formData.convener.email);
-        if (!chairmanUser || !convenerUser) {
-            throw new Error('Chairman or Convener user not found');
+      };
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/committees/create`,
+        payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
-
-        // Log the payload for debugging
-        const payload = {
-            committeeName: formData.committeeName,
-            committeePurpose: formData.committeePurpose,
-            chairman: {
-                userId: chairmanUser._id,
-                name: formData.chairman.name,
-                email: formData.chairman.email,
-            },
-            convener: {
-                userId: convenerUser._id,
-                name: formData.convener.name,
-                email: formData.convener.email,
-            },
-            members: formData.members.map(member => {
-                const memberUser = users.find(u => u.email === member.email);
-                return {
-                    userId: memberUser ? memberUser._id : undefined,
-                    name: member.name,
-                    email: member.email,
-                    role: member.role || 'member'
-                };
-            })
-        };
-        console.log('Committee creation payload:', payload);
-
-        const token = localStorage.getItem("token");
-        const response = await axios.post(
-            `${import.meta.env.VITE_BASE_URL}/api/committees/create`,
-            payload,
-            {
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
-
-        setCommittees(prev => [...prev, response.data]);
-        setIsCommitteeVisible(false);
-        setFormData({
-            committeeName: "",
-            committeePurpose: "",
-            chairman: { name: "", email: "" },
-            convener: { name: "", email: "" },
-            members: []
-        });
-
-        // Show success message
-        alert('Committee created successfully!');
+      );
+      setCommittees(prev => [...prev, response.data]);
+      setIsCommitteeVisible(false);
+      setFormData({
+        committeeName: "",
+        committeePurpose: "",
+        chairman: { name: "", email: "" }
+      });
+      alert('Committee created successfully!');
+      // Redirect chairman to the new committee dashboard
+      if (response.data && response.data._id) {
+        navigate(`/committeeDashboard/${response.data._id}`);
+      }
     } catch (error) {
-        console.error("Error creating committee:", error);
-        alert(error.response?.data?.message || 'Error creating committee');
+      console.error("Error creating committee:", error);
+      alert(error.response?.data?.message || 'Error creating committee');
     }
-};
+  };
 
   return (
     <div className="committee-app">
@@ -173,10 +149,6 @@ const CommitteeApp = () => {
             users={users}
             onSubmit={handleFormSubmit}
             onChange={handleFormChange}
-            onAddMember={() => handleFormChange('members', [
-              ...formData.members, 
-              { name: "", email: "" }
-            ])}
           />
         )}
 

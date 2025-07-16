@@ -5,69 +5,36 @@ const { getUserIdsByEmails } = require('./user.controller');
 
 exports.createCommittee = async (req, res) => {
     try {
-        console.log('createCommittee: called with body:', req.body);
-        const { committeeName, committeePurpose, chairman, convener, members } = req.body;
-        
-        // Validate required fields
-        if (!committeeName || !committeePurpose || !chairman || !convener) {
+        const { committeeName, committeePurpose, chairman } = req.body;
+        // Only chairman is required
+        if (!committeeName || !committeePurpose || !chairman || !chairman.userId) {
             return res.status(400).json({ 
                 message: 'Missing required fields',
-                required: ['committeeName', 'committeePurpose', 'chairman', 'convener']
+                required: ['committeeName', 'committeePurpose', 'chairman']
             });
         }
-
-        // Ensure userId is present for chairman, convener, and all members
-        if (!chairman.userId || !convener.userId || members.some(m => !m.userId)) {
-            return res.status(400).json({
-                message: 'userId is required for chairman, convener, and all members',
-                chairmanUserId: chairman.userId,
-                convenerUserId: convener.userId,
-                memberUserIds: members.map(m => m.userId)
-            });
-        }
-
         const committee = new Committee({
-            committeeName, 
-            committeePurpose, 
+            committeeName,
+            committeePurpose,
             chairman: {
                 userId: chairman.userId,
                 name: chairman.name,
                 email: chairman.email
-            }, 
-            convener: {
-                userId: convener.userId,
-                name: convener.name,
-                email: convener.email
-            }, 
-            members: members.map(member => ({
-                userId: member.userId,
-                name: member.name,
-                email: member.email,
-                role: member.role || 'member'
-            }))
+            },
+            status: 'pending_suggestions'
         });
-
         await committee.save();
-
-        // Try notification delivery, but do not fail committee creation if notification fails
+        // Notify chairman
         try {
-            console.log('createCommittee: preparing to notify members');
-            const allMemberEmails = [chairman.email, convener.email, ...members.map(m => m.email)];
-            console.log('createCommittee: allMemberEmails:', allMemberEmails);
-            const userIds = await getUserIdsByEmails(allMemberEmails);
-            console.log('createCommittee: userIds from emails:', userIds);
-            const message = `You have been added to the committee: ${committee.committeeName}`;
+            const userIds = await getUserIdsByEmails([chairman.email]);
+            const message = `You have been made chairman of the committee: ${committee.committeeName}. Please suggest convener and members.`;
             const link = `/committeeDashboard/${committee._id}`;
-            console.log('createCommittee: calling sendNotification');
             await sendNotification(userIds, message, link);
-            console.log('createCommittee: sendNotification completed');
         } catch (notifyErr) {
             console.error('Notification delivery failed:', notifyErr);
-            // Optionally, you could log this to a DB or monitoring service
         }
         res.status(201).json(committee);
     } catch (error) {
-        console.error('Committee creation error:', error);
         res.status(400).json({ 
             message: 'Error creating committee',
             error: error.message 
@@ -75,6 +42,134 @@ exports.createCommittee = async (req, res) => {
     }
 };
 
+// Chairman suggests convener and members
+exports.suggestPeople = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { suggestedConvener, suggestedMembers } = req.body;
+        console.log('[suggestPeople] Params:', { id });
+        console.log('[suggestPeople] Body:', { suggestedConvener, suggestedMembers });
+        if (!suggestedConvener || !suggestedMembers || !Array.isArray(suggestedMembers)) {
+            console.error('[suggestPeople] Missing suggestedConvener or suggestedMembers', { suggestedConvener, suggestedMembers });
+            return res.status(400).json({ message: 'Suggested convener and members required' });
+        }
+        const committee = await Committee.findById(id);
+        if (!committee) {
+            console.error('[suggestPeople] Committee not found for id:', id);
+            return res.status(404).json({ message: 'Committee not found' });
+        }
+        // Only chairman can suggest
+        if (!committee.chairman || !committee.chairman.userId) {
+            console.error('[suggestPeople] Committee chairman missing or malformed:', committee.chairman);
+        }
+        if (committee.chairman.userId.toString() !== req.user._id.toString()) {
+            console.error('[suggestPeople] User is not chairman:', { chairmanId: committee.chairman.userId, userId: req.user._id });
+            return res.status(403).json({ message: 'Only chairman can suggest people' });
+        }
+        committee.suggestedConvener = suggestedConvener;
+        committee.suggestedMembers = suggestedMembers;
+        committee.status = 'pending_approval';
+        committee.adminComment = undefined; // Clear any previous admin comment
+        await committee.save();
+        // Notify admin(s)
+        try {
+            // Find all admins
+            const User = require('../models/user.model');
+            const admins = await User.find({ status: 'admin' });
+            const userIds = admins.map(a => a._id);
+            const message = `Chairman of ${committee.committeeName} has suggested convener and members for approval.`;
+            const link = `/committeeDashboard/${committee._id}`;
+            await sendNotification(userIds, message, link);
+        } catch (notifyErr) {
+            console.error('Notification to admin failed:', notifyErr);
+        }
+        res.status(200).json({ message: 'Suggestions sent to admin for approval.' });
+    } catch (error) {
+        console.error('[suggestPeople] Exception:', error);
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// Admin approves or rejects suggestions
+exports.approveSuggestions = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { approve, comment } = req.body;
+        const committee = await Committee.findById(id);
+        if (!committee) return res.status(404).json({ message: 'Committee not found' });
+        // Only admin can approve
+        const User = require('../models/user.model');
+        const admin = await User.findById(req.user._id);
+        if (!admin || admin.status !== 'admin') {
+            return res.status(403).json({ message: 'Only admin can approve/reject' });
+        }
+        if (approve) {
+            // Move suggestions to actual convener/members
+            committee.convener = committee.suggestedConvener;
+            committee.members = committee.suggestedMembers;
+            committee.suggestedConvener = undefined;
+            committee.suggestedMembers = [];
+            committee.status = 'formed';
+            committee.adminComment = undefined;
+            await committee.save();
+            
+            // Notify chairman
+            try {
+                const userIds = [committee.chairman.userId];
+                const message = `Your suggested convener and members for ${committee.committeeName} have been approved. Committee is now fully formed.`;
+                const link = `/committeeDashboard/${committee._id}`;
+                await sendNotification(userIds, message, link);
+            } catch (notifyErr) {
+                console.error('Notification to chairman failed:', notifyErr);
+            }
+            
+            // Notify convener
+            try {
+                if (committee.convener && committee.convener.userId) {
+                    const userIds = [committee.convener.userId];
+                    const message = `You have been assigned as convener of the committee: ${committee.committeeName}.`;
+                    const link = `/committeeDashboard/${committee._id}`;
+                    await sendNotification(userIds, message, link);
+                }
+            } catch (notifyErr) {
+                console.error('Notification to convener failed:', notifyErr);
+            }
+            
+            // Notify members
+            try {
+                if (committee.members && committee.members.length > 0) {
+                    const memberUserIds = committee.members.map(m => m.userId).filter(id => id);
+                    if (memberUserIds.length > 0) {
+                        const message = `You have been assigned as a member of the committee: ${committee.committeeName}.`;
+                        const link = `/committeeDashboard/${committee._id}`;
+                        await sendNotification(memberUserIds, message, link);
+                    }
+                }
+            } catch (notifyErr) {
+                console.error('Notification to members failed:', notifyErr);
+            }
+            
+            res.status(200).json({ message: 'Committee fully formed.' });
+        } else {
+            // Rejected, send comment to chairman
+            committee.status = 'pending_suggestions'; // Allow chairman to resubmit
+            committee.adminComment = comment || 'Not approved';
+            // Keep the suggestions for chairman to modify
+            await committee.save();
+            try {
+                const userIds = [committee.chairman.userId];
+                const message = `Your suggested convener and members for ${committee.committeeName} were not approved. Please check the committee dashboard for details.`;
+                const link = `/committeeDashboard/${committee._id}`;
+                await sendNotification(userIds, message, link);
+            } catch (notifyErr) {
+                console.error('Notification to chairman failed:', notifyErr);
+            }
+            res.status(200).json({ message: 'Suggestions rejected and comment sent to chairman.' });
+        }
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
 exports.getCommittees = async (req, res) => {
     try {
         const committees = await Committee.find();

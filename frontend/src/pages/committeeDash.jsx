@@ -7,6 +7,115 @@ import { UserDataContext } from '../context/UserDataContext';
 import React from "react";
 
 function CommitteeDashboard() {
+    // Chairman suggest people UI state (must be inside component)
+    const [suggestedConvener, setSuggestedConvener] = useState({ name: '', email: '' });
+    const [suggestedMembers, setSuggestedMembers] = useState([]);
+    const [allUsers, setAllUsers] = useState([]);
+    const [suggestLoading, setSuggestLoading] = useState(false);
+    
+    // Admin approval state
+    const [showAdminApproval, setShowAdminApproval] = useState(false);
+    const [adminComment, setAdminComment] = useState('');
+    const [adminApprovalLoading, setAdminApprovalLoading] = useState(false);
+
+
+
+    // ...existing code for userCommitteeRole, isChairman, etc...
+
+    // ...existing code for userCommitteeRole, isChairman, etc...
+
+    // ...existing code...
+
+    // Suggest people submit handler
+    const handleSuggestPeople = async (e) => {
+        e.preventDefault();
+        // Filter out any members with missing name or email
+        const validMembers = suggestedMembers.filter(m => m.name && m.email);
+        console.log('[SuggestPeople] suggestedConvener:', suggestedConvener);
+        console.log('[SuggestPeople] validMembers:', validMembers);
+        if (!suggestedConvener.name || !suggestedConvener.email || validMembers.length === 0) {
+            alert('Please select a convener and at least one valid member.');
+            return;
+        }
+        setSuggestLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            // Find userId for convener and members
+            const convenerUser = allUsers.find(u => u.email === suggestedConvener.email);
+            const membersPayload = validMembers.map(m => {
+                const user = allUsers.find(u => u.email === m.email);
+                return {
+                    userId: user ? user._id : undefined,
+                    name: user ? `${user.fullname.firstname} ${user.fullname.lastname}` : m.name,
+                    email: m.email,
+                    role: m.role || 'member'
+                };
+            });
+            const payload = {
+                suggestedConvener: {
+                    userId: convenerUser ? convenerUser._id : undefined,
+                    name: convenerUser ? `${convenerUser.fullname.firstname} ${convenerUser.fullname.lastname}` : suggestedConvener.name,
+                    email: suggestedConvener.email
+                },
+                suggestedMembers: membersPayload
+            };
+            console.log('[SuggestPeople] payload to submit:', payload);
+            await axios.post(
+                `${import.meta.env.VITE_BASE_URL}/api/committees/${id}/suggest-people`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            alert('Suggestions sent to admin for approval.');
+            setSuggestedConvener({ name: '', email: '' });
+            setSuggestedMembers([]);
+            fetchCommitteeData();
+        } catch {
+            alert('Failed to send suggestions.');
+        } finally {
+            setSuggestLoading(false);
+        }
+    };
+
+    // Add/remove member helpers
+    const handleAddSuggestedMember = () => {
+        setSuggestedMembers(prev => [...prev, { name: '', email: '', role: 'member' }]);
+    };
+    const handleRemoveSuggestedMember = (idx) => {
+        setSuggestedMembers(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    // Admin approval functions
+    const handleAdminApproval = async (approve) => {
+        setAdminApprovalLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const payload = {
+                approve,
+                comment: approve ? '' : adminComment
+            };
+            
+            await axios.post(
+                `${import.meta.env.VITE_BASE_URL}/api/committees/${id}/approve-suggestions`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            if (approve) {
+                alert('Committee suggestions approved successfully! Committee is now fully formed.');
+            } else {
+                alert('Committee suggestions rejected and feedback sent to chairman.');
+            }
+            
+            setShowAdminApproval(false);
+            setAdminComment('');
+            fetchCommitteeData();
+        } catch (error) {
+            console.error('Admin approval error:', error);
+            alert('Failed to process approval. Please try again.');
+        } finally {
+            setAdminApprovalLoading(false);
+        }
+    };
     const navigate = useNavigate();
     const { id } = useParams();
     const { user } = useContext(UserDataContext);
@@ -60,27 +169,24 @@ function CommitteeDashboard() {
     const [newMoMDate, setNewMoMDate] = useState("");
     const [newMoMTime, setNewMoMTime] = useState("");
 
-
-    const DUMMY_RECENT_MEETINGS = React.useMemo(() => [
-        {
-            topic: "Budget Planning",
-            date: "2024-03-10",
-            time: "10:00 AM",
-            minutesText: "Discussed allocation of funds for upcoming projects and reviewed last quarter's expenses."
-        },
-        {
-            topic: "Annual Report Discussion",
-            date: "2024-03-15",
-            time: "2:30 PM",
-            minutesText: "Reviewed department performance, proposed improvements, and finalized the annual report format."
-        },
-        {
-            topic: "Event Coordination",
-            date: "2024-03-20",
-            time: "11:00 AM",
-            minutesText: "Planned logistics, assigned roles, and confirmed the venue for the upcoming seminar."
+    // Fetch all users for suggestion (only for chairman)
+    useEffect(() => {
+        // Only fetch all users if chairman and suggestion form is visible
+        if (isChairman && (committee.status === 'pending_suggestions' || committee.adminComment)) {
+            const fetchUsers = async () => {
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await axios.get(`${import.meta.env.VITE_BASE_URL}/users/users`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    setAllUsers(res.data);
+                } catch {
+                    setAllUsers([]);
+                }
+            };
+            fetchUsers();
         }
-    ], []);
+    }, [isChairman, committee.status, committee.adminComment]);
 
     const [recentMeetings, setRecentMeetings] = useState([]);
 
@@ -99,14 +205,14 @@ function CommitteeDashboard() {
             if (response.data && response.data.length > 0) {
                 setRecentMeetings(response.data);
             } else {
-                setRecentMeetings(DUMMY_RECENT_MEETINGS);
+                setRecentMeetings([]);
             }
         } catch (err) {
             console.error('Error fetching minutes:', err);
             setError(err.response?.data?.message || 'Error loading minutes');
-            setRecentMeetings(DUMMY_RECENT_MEETINGS);
+            setRecentMeetings([]);
         }
-    }, [id, DUMMY_RECENT_MEETINGS]);
+    }, [id]);
 
     const fetchCommitteeData = useCallback(async () => {
         if (!id) {
@@ -159,23 +265,18 @@ function CommitteeDashboard() {
     const updatedMeetings = [...recentMeetings];
     updatedMeetings[selectedMeetingIndex].minutesText = editedMinutes;
 
-    // Detect if it's a dummy meeting (no _id property)
-    const isDummy = !recentMeetings[selectedMeetingIndex]._id;
-
-    if (isDummy) {
-        // Just update the local state
-        setRecentMeetings(updatedMeetings);
-        setShowMinutes(false);
-        setSelectedMeetingIndex(null);
-        alert("Dummy meeting minutes updated locally.");
-        return;
-    }
-
     if (!canEditMinutes) return;
 
     try {
         const token = localStorage.getItem('token');
         const meeting = recentMeetings[selectedMeetingIndex];
+        
+        // Check if meeting has an _id (actual meeting vs dummy)
+        if (!meeting._id) {
+            alert("Cannot edit this meeting - it may not be saved in the database.");
+            return;
+        }
+        
         // Validate and format date/time
         const formattedDate = meeting.date ? new Date(meeting.date).toISOString().slice(0, 10) : '';
         let formattedTime = meeting.time;
@@ -365,19 +466,46 @@ function CommitteeDashboard() {
                     <h2 id="comName">{committee.committeeName}</h2>
                     <h3 id="purp">Purpose:</h3>
                     <p id="purpose">{committee.committeePurpose}</p>
+                    
+                    {/* Committee Status Indicator */}
+                    <div style={{ marginTop: '15px' }}>
+                        <h4>Status: 
+                            <span style={{
+                                marginLeft: '10px',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                backgroundColor: 
+                                    committee.status === 'formed' ? '#d4edda' :
+                                    committee.status === 'pending_approval' ? '#fff3cd' :
+                                    committee.adminComment ? '#f8d7da' :
+                                    '#e2e3e5',
+                                color: 
+                                    committee.status === 'formed' ? '#155724' :
+                                    committee.status === 'pending_approval' ? '#856404' :
+                                    committee.adminComment ? '#721c24' :
+                                    '#383d41'
+                            }}>
+                                {committee.status === 'formed' ? 'Fully Formed' :
+                                 committee.status === 'pending_approval' ? 'Pending Admin Approval' :
+                                 committee.adminComment ? 'Rejected - Needs Revision' :
+                                 'Awaiting Suggestions'}
+                            </span>
+                        </h4>
+                    </div>
                 </div>
 
                 <div className="chief">
                     <div className="chairman">
                         <h4>Chairperson</h4>
-                        <p>Name: {committee.chairman.name}</p>
-                        <p>Email: {committee.chairman.email}</p>
+                        <p>Name: {committee.chairman ? committee.chairman.name : 'N/A'}</p>
+                        <p>Email: {committee.chairman ? committee.chairman.email : 'N/A'}</p>
                     </div>
 
                     <div className="convener">
                         <h4>Convener</h4>
-                        <p>Name: {committee.convener.name}</p>
-                        <p>Email: {committee.convener.email}</p>
+                        <p>Name: {committee.convener ? committee.convener.name : 'N/A'}</p>
+                        <p>Email: {committee.convener ? committee.convener.email : 'N/A'}</p>
                     </div>
                 </div>
             </div>
@@ -391,6 +519,15 @@ function CommitteeDashboard() {
                     >
                         Manage Users
                     </Link>
+                )}
+                {isAdmin && committee.status === 'pending_approval' && (
+                    <button 
+                        className="admin-approval-btn" 
+                        onClick={() => setShowAdminApproval(true)}
+                        style={{ backgroundColor: '#ffa500', color: 'white', marginRight: '10px' }}
+                    >
+                        Review Suggestions
+                    </button>
                 )}
                 <a
                     href={`/scheduleCalendar?committeeId=${id}`}
@@ -415,6 +552,7 @@ function CommitteeDashboard() {
                         Create New MoM
                     </button>
                 )}
+                {/* Suggest Convener/Members button removed as per request */}
                 {/* Dissolve Committee button for chairman only */}
                 {isChairman && (
                     <button onClick={handleDissolveCommittee} className="dissolve-btn" style={{backgroundColor: 'red', color: 'white'}}>
@@ -445,6 +583,85 @@ function CommitteeDashboard() {
                 </table>
             </div>
 
+            {isChairman && (committee.status === 'pending_suggestions' || committee.adminComment) && (
+                <section className="suggest-people-form-section">
+                    <h2>Suggest Convener & Members</h2>
+                    {committee.status === 'pending_suggestions' && committee.adminComment && (
+                        <div style={{
+                            backgroundColor: '#f8d7da',
+                            color: '#721c24',
+                            padding: '15px',
+                            borderRadius: '5px',
+                            marginBottom: '20px',
+                            border: '1px solid #f5c6cb'
+                        }}>
+                            <h3>Admin Feedback:</h3>
+                            <p>{committee.adminComment}</p>
+                            <p><em>Please review and resubmit your suggestions.</em></p>
+                        </div>
+                    )}
+                    <form onSubmit={handleSuggestPeople} className="suggest-people-form">
+                        <div>
+                            <label>Convener:</label>
+                            <select
+                                value={suggestedConvener.email}
+                                onChange={e => {
+                                    const selected = allUsers.find(u => u.email === e.target.value);
+                                    if (selected) {
+                                        setSuggestedConvener({ 
+                                            name: `${selected.fullname.firstname} ${selected.fullname.lastname}`, 
+                                            email: selected.email 
+                                        });
+                                    } else {
+                                        setSuggestedConvener({ name: '', email: '' });
+                                    }
+                                }}
+                                required
+                            >
+                                <option value="">Select Convener</option>
+                                {allUsers.map(u => (
+                                    <option key={u._id} value={u.email}>{u.fullname.firstname} {u.fullname.lastname} ({u.email})</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label>Members:</label>
+                            {suggestedMembers.map((m, idx) => (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+                                    <select
+                                        value={m.email}
+                                        onChange={e => {
+                                            const selected = allUsers.find(u => u.email === e.target.value);
+                                            setSuggestedMembers(prev => {
+                                                const updated = prev.map((mem, i) =>
+                                                    i === idx
+                                                        ? selected
+                                                            ? { ...mem, name: `${selected.fullname.firstname} ${selected.fullname.lastname}`, email: selected.email }
+                                                            : { ...mem, name: '', email: '' }
+                                                        : mem
+                                                );
+                                                console.log('[Dropdown] suggestedMembers after change:', updated);
+                                                return updated;
+                                            });
+                                        }}
+                                        required
+                                    >
+                                        <option value="">Select Member</option>
+                                        {allUsers.map(u => (
+                                            <option key={u._id} value={u.email}>{u.fullname.firstname} {u.fullname.lastname} ({u.email})</option>
+                                        ))}
+                                    </select>
+                                    <button type="button" onClick={() => handleRemoveSuggestedMember(idx)} style={{ marginLeft: 8 }}>Remove</button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={handleAddSuggestedMember} style={{ marginTop: 4 }}>Add Member</button>
+                        </div>
+                        <button type="submit" className="submit-btn" style={{ marginTop: 12 }} disabled={suggestLoading}>
+                            {suggestLoading ? 'Submitting...' : 'Submit Suggestions'}
+                        </button>
+                    </form>
+                </section>
+            )}
             {showRecentMeetings && (
                 <section className="recent-meetings-section">
                     <button className="close-btn" onClick={() => setShowRecentMeetings(false)}>
@@ -462,8 +679,15 @@ function CommitteeDashboard() {
                             </tr>
                         </thead>
                         <tbody>
-                            {recentMeetings.map((meeting, index) => (
-                                <React.Fragment key={index}>
+                            {recentMeetings.length === 0 ? (
+                                <tr>
+                                    <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>
+                                        No meetings found.
+                                    </td>
+                                </tr>
+                            ) : (
+                                recentMeetings.map((meeting, index) => (
+                                    <React.Fragment key={index}>
                                     <tr>
                                         <td>{index + 1}</td>
                                         <td>{meeting.topic}</td>
@@ -531,7 +755,7 @@ function CommitteeDashboard() {
                                         </tr>
                                     )}
                                 </React.Fragment>
-                            ))}
+                            )))}
                         </tbody>
                     </table>
                 </section>
@@ -635,6 +859,131 @@ function CommitteeDashboard() {
                             </tbody>
                         </table>
                     )}
+                </section>
+            )}
+
+            {/* Admin Approval Modal */}
+            {showAdminApproval && isAdmin && committee.status === 'pending_approval' && (
+                <section className="admin-approval-section" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        padding: '30px',
+                        borderRadius: '10px',
+                        maxWidth: '600px',
+                        width: '90%',
+                        maxHeight: '80vh',
+                        overflowY: 'auto'
+                    }}>
+                        <button 
+                            className="close-btn" 
+                            onClick={() => setShowAdminApproval(false)}
+                            style={{ float: 'right', fontSize: '20px' }}
+                        >
+                            ✕
+                        </button>
+                        
+                        <h2 style={{ marginBottom: '20px' }}>Review Committee Suggestions</h2>
+                        
+                        <div style={{ marginBottom: '20px' }}>
+                            <h3>Committee: {committee.committeeName}</h3>
+                            <p><strong>Purpose:</strong> {committee.committeePurpose}</p>
+                            <p><strong>Chairman:</strong> {committee.chairman?.name} ({committee.chairman?.email})</p>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <h3>Suggested Convener</h3>
+                            {committee.suggestedConvener ? (
+                                <div style={{ padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px' }}>
+                                    <p><strong>Name:</strong> {committee.suggestedConvener.name}</p>
+                                    <p><strong>Email:</strong> {committee.suggestedConvener.email}</p>
+                                </div>
+                            ) : (
+                                <p>No convener suggested</p>
+                            )}
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <h3>Suggested Members</h3>
+                            {committee.suggestedMembers && committee.suggestedMembers.length > 0 ? (
+                                <div>
+                                    {committee.suggestedMembers.map((member, idx) => (
+                                        <div key={idx} style={{ 
+                                            padding: '10px', 
+                                            backgroundColor: '#f5f5f5', 
+                                            borderRadius: '5px',
+                                            marginBottom: '5px'
+                                        }}>
+                                            <p><strong>Name:</strong> {member.name}</p>
+                                            <p><strong>Email:</strong> {member.email}</p>
+                                            <p><strong>Role:</strong> {member.role || 'member'}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p>No members suggested</p>
+                            )}
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', marginBottom: '10px' }}>
+                                <strong>Comment (Required for rejection):</strong>
+                            </label>
+                            <textarea
+                                value={adminComment}
+                                onChange={(e) => setAdminComment(e.target.value)}
+                                placeholder="Enter your feedback/comments here..."
+                                style={{
+                                    width: '100%',
+                                    height: '80px',
+                                    padding: '10px',
+                                    borderRadius: '5px',
+                                    border: '1px solid #ddd'
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => handleAdminApproval(false)}
+                                disabled={adminApprovalLoading}
+                                style={{
+                                    padding: '10px 20px',
+                                    backgroundColor: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    cursor: adminApprovalLoading ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {adminApprovalLoading ? 'Processing...' : 'Reject'}
+                            </button>
+                            <button
+                                onClick={() => handleAdminApproval(true)}
+                                disabled={adminApprovalLoading}
+                                style={{
+                                    padding: '10px 20px',
+                                    backgroundColor: '#28a745',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    cursor: adminApprovalLoading ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {adminApprovalLoading ? 'Processing...' : 'Approve'}
+                            </button>
+                        </div>
+                    </div>
                 </section>
             )}
 
