@@ -168,6 +168,7 @@ function CommitteeDashboard() {
     const [newMoMTopic, setNewMoMTopic] = useState("");
     const [newMoMDate, setNewMoMDate] = useState("");
     const [newMoMTime, setNewMoMTime] = useState("");
+    const [draftLoading, setDraftLoading] = useState(false);
 
     // Fetch all users for suggestion (only for chairman)
     useEffect(() => {
@@ -353,6 +354,40 @@ function CommitteeDashboard() {
         } catch (err) {
             console.error("Error saving MoM:", err);
             alert("Failed to save MoM.");
+        }
+    };
+
+    const handleGenerateDraft = async () => {
+        if (!newMoMTopic.trim() || !newMoMDate || !newMoMTime || !newMinutesText.trim()) {
+            alert("Please fill Topic, Date, Time, and raw notes before generating a draft.");
+            return;
+        }
+
+        setDraftLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post(
+                `${import.meta.env.VITE_BASE_URL}/api/minutes/ai-draft`,
+                {
+                    committeeId: id,
+                    topic: newMoMTopic,
+                    date: newMoMDate,
+                    time: newMoMTime,
+                    rawNotes: newMinutesText
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            setNewMinutesText(response.data?.draft || newMinutesText);
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to generate draft.');
+        } finally {
+            setDraftLoading(false);
         }
     };
 
@@ -814,9 +849,15 @@ function CommitteeDashboard() {
                     <textarea
                         value={newMinutesText}
                         onChange={e => setNewMinutesText(e.target.value)}
-                        placeholder="Enter meeting minutes here..."
+                        placeholder="Enter raw notes or minutes here..."
                         rows="10"
                     />
+                    <button onClick={handleGenerateDraft} className="save-mom-btn" disabled={draftLoading}>
+                        {draftLoading ? 'Generating Draft...' : 'Generate Structured Draft'}
+                    </button>
+                    <p style={{ marginTop: '8px', fontSize: '13px', color: '#555' }}>
+                        Assistant output is a draft only. Please review and edit before saving.
+                    </p>
                     <button onClick={handleSaveNewMoM} className="save-mom-btn">
                         Save MoM
                     </button>

@@ -5,6 +5,64 @@ const Notification = require('../models/notification.model');
 const Committee = require('../models/committee.model');
 const { getUserIdsByEmails } = require('./user.controller');
 
+const MAX_NOTES_LENGTH = 8000;
+
+function normalizeLine(line) {
+    return String(line || '').replace(/\s+/g, ' ').trim();
+}
+
+function collectActionItems(lines) {
+    const actionPrefixes = [/^todo[:\-]?\s*/i, /^action[:\-]?\s*/i, /^ai[:\-]?\s*/i, /^follow[- ]?up[:\-]?\s*/i];
+    return lines
+        .filter((line) => actionPrefixes.some((re) => re.test(line)) || /\b(will|must|should|by\s+\d{4}-\d{2}-\d{2})\b/i.test(line))
+        .slice(0, 8)
+        .map((line, idx) => `${idx + 1}. ${line.replace(/^[-*\d.\s]+/, '')}`);
+}
+
+function collectDecisions(lines) {
+    return lines
+        .filter((line) => /\b(decided|approved|resolved|agreed)\b/i.test(line))
+        .slice(0, 6)
+        .map((line, idx) => `${idx + 1}. ${line.replace(/^[-*\d.\s]+/, '')}`);
+}
+
+function buildDraft({ topic, date, time, rawNotes }) {
+    const cleaned = String(rawNotes || '').slice(0, MAX_NOTES_LENGTH);
+    const lines = cleaned
+        .split(/\r?\n/)
+        .map(normalizeLine)
+        .filter(Boolean);
+
+    const summaryCandidates = lines.slice(0, 3);
+    const decisions = collectDecisions(lines);
+    const actionItems = collectActionItems(lines);
+
+    const discussion = lines
+        .slice(0, 10)
+        .map((line, idx) => `${idx + 1}. ${line.replace(/^[-*\d.\s]+/, '')}`);
+
+    return [
+        `Topic: ${topic}`,
+        `Date: ${date}`,
+        `Time: ${time}`,
+        '',
+        'Summary:',
+        summaryCandidates.length ? summaryCandidates.map((line, idx) => `${idx + 1}. ${line}`).join('\n') : '1. Summary to be added.',
+        '',
+        'Key Discussions:',
+        discussion.length ? discussion.join('\n') : '1. Key discussion points to be added.',
+        '',
+        'Decisions:',
+        decisions.length ? decisions.join('\n') : '1. No explicit decisions captured from notes.',
+        '',
+        'Action Items:',
+        actionItems.length ? actionItems.join('\n') : '1. No explicit action items detected. Add owners and deadlines manually.',
+        '',
+        'Notes:',
+        '- This draft is assistant-generated from your raw notes. Please review before publishing.'
+    ].join('\n');
+}
+
 const createMinutes = async (req, res) => {
     try {
         const { committeeId, topic, date, time, minutesText } = req.body;
@@ -180,6 +238,30 @@ async function sendNotification(userIds, message, link = null) {
     await Notification.insertMany(notifications);
 }
 
+const generateMinutesDraft = async (req, res) => {
+    try {
+        const { committeeId, topic, date, time, rawNotes } = req.body;
+        if (!committeeId || !topic || !date || !time || !rawNotes) {
+            return res.status(400).json({ message: 'committeeId, topic, date, time and rawNotes are required.' });
+        }
+
+        if (String(rawNotes).length > MAX_NOTES_LENGTH) {
+            return res.status(400).json({ message: `rawNotes must be ${MAX_NOTES_LENGTH} characters or fewer.` });
+        }
+
+        const committee = await Committee.findById(committeeId);
+        if (!committee) {
+            return res.status(404).json({ message: 'Committee not found' });
+        }
+
+        const draft = buildDraft({ topic, date, time, rawNotes });
+        return res.status(200).json({ draft });
+    } catch (error) {
+        console.error('generateMinutesDraft error:', error.message);
+        return res.status(500).json({ message: 'Failed to generate minutes draft' });
+    }
+};
+
 module.exports = {
     createMinutes,
     getMinutesByCommittee,
@@ -189,5 +271,6 @@ module.exports = {
     getSuggestionsByMeeting,
     deleteSuggestion,
     sendNotification,
-    getAllSuggestionsByCommittee
+    getAllSuggestionsByCommittee,
+    generateMinutesDraft
 };

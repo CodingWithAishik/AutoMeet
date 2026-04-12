@@ -8,6 +8,7 @@ router.use(authUser);
 
 // Create a real MoM (Minutes of Meeting)
 router.post('/create', minutesController.createMinutes);
+router.post('/ai-draft', requireCommitteeRole('convener'), minutesController.generateMinutesDraft);
 router.get('/committee/:committeeId', minutesController.getMinutesByCommittee);
 // Only convener can update MoM
 router.put('/:id', requireCommitteeRole('convener'), minutesController.updateMinutes);
