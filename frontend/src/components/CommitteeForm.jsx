@@ -6,8 +6,7 @@ const CommitteeForm = ({
   }, 
   users = [], 
   onSubmit, 
-  onChange, 
-  onAddMember 
+  onChange
 }) => {
   return (
     <form onSubmit={onSubmit}>
@@ -95,8 +94,7 @@ CommitteeForm.propTypes = {
     })
   ),
   onSubmit: PropTypes.func,
-  onChange: PropTypes.func,
-  onAddMember: PropTypes.func
+  onChange: PropTypes.func
 };
 
 export default CommitteeForm;

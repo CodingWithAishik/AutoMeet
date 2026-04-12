@@ -1,12 +1,21 @@
 const mongoose = require('mongoose');
 
-function connectTodb(){
-    mongoose.connect(process.env.DB_CONNECT,
-        ).then(() => {
-            console.log(`Connected to DB`);
+async function connectTodb() {
+    if (!process.env.DB_CONNECT) {
+        throw new Error('DB_CONNECT is not configured');
+    }
 
-        }).catch(err => console.log(err));
-
+    try {
+        await mongoose.connect(process.env.DB_CONNECT, {
+            serverSelectionTimeoutMS: 10000,
+            maxPoolSize: 20,
+            minPoolSize: 2
+        });
+        console.log('Connected to DB');
+    } catch (err) {
+        console.error('Database connection failed:', err.message);
+        throw err;
+    }
 }
 
 module.exports = connectTodb;

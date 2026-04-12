@@ -1,10 +1,8 @@
-import React, { useContext } from 'react';
+import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import "../styles/committeeList.css";
-import { UserDataContext } from '../context/UserDataContext';
 
 const CommitteeList = ({ committees }) => {
-  const { user } = useContext(UserDataContext);
   return (
     <div className="committee-list">
       <h2>Existing Committees</h2>
@@ -39,6 +37,28 @@ const CommitteeList = ({ committees }) => {
       )}
     </div>
   );
+};
+
+CommitteeList.propTypes = {
+  committees: PropTypes.arrayOf(
+    PropTypes.shape({
+      _id: PropTypes.string.isRequired,
+      committeeName: PropTypes.string,
+      committeePurpose: PropTypes.string,
+      chairman: PropTypes.shape({
+        name: PropTypes.string
+      }),
+      convener: PropTypes.shape({
+        name: PropTypes.string
+      }),
+      members: PropTypes.arrayOf(
+        PropTypes.shape({
+          name: PropTypes.string,
+          email: PropTypes.string
+        })
+      )
+    })
+  ).isRequired
 };
 
 export default CommitteeList;

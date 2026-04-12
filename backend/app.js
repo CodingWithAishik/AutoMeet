@@ -2,6 +2,8 @@ const dotenv = require('dotenv');
 dotenv.config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const app = express();
 const cookieparser = require('cookie-parser');
 const connectTodb = require('./db/db');
@@ -13,6 +15,16 @@ const meetingRoutes = require('./routes/meeting.routes');
 
 
 connectTodb();
+
+app.disable('x-powered-by');
+app.use(helmet());
+app.use(rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many requests, please try again later.' }
+}));
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
@@ -33,6 +45,15 @@ app.use('/api/meetings', meetingRoutes);
 
 app.get('/' , (req,res) => {
     res.send('Hello world');
+});
+
+app.use((req, res) => {
+    res.status(404).json({ message: 'Route not found' });
+});
+
+app.use((err, req, res, next) => {
+    console.error('Unhandled app error:', err);
+    res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
 });
 
 module.exports = app;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { UserDataContext } from '../context/UserDataContext';
@@ -20,7 +20,7 @@ const NotificationList = () => {
           },
         });
         setNotifications(res.data || []);
-      } catch (err) {
+      } catch {
         setNotifications([]);
       } finally {
         setLoading(false);

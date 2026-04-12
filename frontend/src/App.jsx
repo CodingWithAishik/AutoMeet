@@ -1,4 +1,3 @@
-import React from "react";
 import { Route, Routes } from "react-router-dom";
 
 import Home from "./pages/home.jsx";
@@ -13,17 +12,12 @@ import ScheduleCalendar from "./pages/scheduleCalendar.jsx"
 import UserProtectWrapper from "./pages/userProtectWrapper.jsx";
 import UserLogout from "./pages/UserLogout.jsx";
 import ManageUsers from "./pages/ManageUsers.jsx";
-import { AuthProvider } from "./context/AuthContext.jsx";
-import UserContext from "./context/UserContext.jsx";
-import PrivateRoute from "./components/PrivateRoute.jsx";
 
 const App = () => {
   return (
-    <AuthProvider>
-      <UserContext>
-        <Routes>
-          {/* Handle root path */}
-          <Route path="/" element={<WelcomePage />} />
+    <Routes>
+      {/* Handle root path */}
+      <Route path="/" element={<WelcomePage />} />
 
 
           {/* Other defined routes */}
@@ -36,19 +30,17 @@ const App = () => {
           <Route path="/manage-users" element={<ManageUsers />} />
           <Route path="/committeeDashboard/:id" element={<CommitteeDashboard />} />
 
-          <Route path="/home" element={
-            <UserProtectWrapper>
-              <Home />
-            </UserProtectWrapper>
-          } />
-          <Route path="/user/logout" element={
-            <UserProtectWrapper>
-              <UserLogout />
-            </UserProtectWrapper>
-          } />
-        </Routes>
-      </UserContext>
-    </AuthProvider>
+      <Route path="/home" element={
+        <UserProtectWrapper>
+          <Home />
+        </UserProtectWrapper>
+      } />
+      <Route path="/user/logout" element={
+        <UserProtectWrapper>
+          <UserLogout />
+        </UserProtectWrapper>
+      } />
+    </Routes>
 
   );
 };

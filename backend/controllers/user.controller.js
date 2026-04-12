@@ -4,56 +4,67 @@ const { validationResult } = require('express-validator');
 const blackListTokenModel = require('../models/blacklistToken.model');
 
 module.exports.registerUser = async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
 
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        const { fullname, email, password } = req.body;
+
+        const existingUser = await userModel.findOne({ email });
+        if (existingUser) {
+            return res.status(409).json({ message: 'Email already registered' });
+        }
+
+        const hashedPassword = await userModel.hashPassword(password);
+
+        const user = await userService.createUser({
+            firstname: fullname.firstname,
+            lastname: fullname.lastname,
+            email,
+            password: hashedPassword
+        });
+
+        const token = user.generateAuthToken();
+        res.status(201).json({ token, user });
+    } catch (err) {
+        console.error('Register user error:', err.message);
+        res.status(500).json({ message: 'Server error' });
     }
-
-    const { fullname, email, password } = req.body;
-
-    const hashedPassword = await userModel.hashPassword(password);
-
-    const user = await userService.createUser({
-        firstname: fullname.firstname,
-        lastname: fullname.lastname,
-        email,
-        password: hashedPassword
-    });
-
-    const token = user.generateAuthToken();
-
-    res.status(201).json({ token, user });
-
-
-}
+};
 module.exports.loginUser = async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
 
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        const { email, password } = req.body;
+        const user = await userModel.findOne({ email }).select('+password');
+
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        const isMatch = await user.comparePassword(password);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        const token = user.generateAuthToken();
+        res.cookie('token', token, {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+        });
+
+        res.status(200).json({ token, user });
+    } catch (err) {
+        console.error('Login user error:', err.message);
+        res.status(500).json({ message: 'Server error' });
     }
-
-    const { email, password } = req.body;
-
-    const user = await userModel.findOne({ email }).select('+password');
-
-    if (!user) {
-        return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    const isMatch = await user.comparePassword(password);
-
-    if (!isMatch) {
-        return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    const token = user.generateAuthToken();
-
-    res.cookie('token', token);
-
-    res.status(200).json({ token, user });
-}
+};
 module.exports.getUserProfile = async (req, res, next) => {
     // Remove status for non-admins
     const user = req.user.toObject ? req.user.toObject() : req.user;
@@ -64,14 +75,24 @@ module.exports.getUserProfile = async (req, res, next) => {
 
 }
 module.exports.logoutUser = async (req, res, next) => {
-    res.clearCookie('token');
-    const token = req.cookies.token || req.headers.authorization.split(' ')[ 1 ];
+    try {
+        const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+        res.clearCookie('token');
 
-    await blackListTokenModel.create({ token });
+        if (token) {
+            await blackListTokenModel.updateOne(
+                { token },
+                { token },
+                { upsert: true }
+            );
+        }
 
-    res.status(200).json({ message: 'Logged out' });
-
-}
+        res.status(200).json({ message: 'Logged out' });
+    } catch (err) {
+        console.error('Logout user error:', err.message);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
 module.exports.updateUserRole = async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
@@ -123,7 +144,12 @@ module.exports.getAllUsers = async (req, res) => {
 module.exports.getUserNames = async (req, res) => {
     try {
         const users = await userModel.find().select('fullname email status');
-        return res.status(200).json(users.fullname);
+        return res.status(200).json(users.map((u) => ({
+            _id: u._id,
+            fullname: u.fullname,
+            email: u.email,
+            status: u.status
+        })));
     } catch (err) {
         console.error('Get user names error:', err);
         return res.status(500).json({ message: 'Server error.' });

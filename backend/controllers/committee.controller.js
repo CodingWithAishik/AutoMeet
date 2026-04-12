@@ -47,23 +47,15 @@ exports.suggestPeople = async (req, res) => {
     try {
         const { id } = req.params;
         const { suggestedConvener, suggestedMembers } = req.body;
-        console.log('[suggestPeople] Params:', { id });
-        console.log('[suggestPeople] Body:', { suggestedConvener, suggestedMembers });
         if (!suggestedConvener || !suggestedMembers || !Array.isArray(suggestedMembers)) {
-            console.error('[suggestPeople] Missing suggestedConvener or suggestedMembers', { suggestedConvener, suggestedMembers });
             return res.status(400).json({ message: 'Suggested convener and members required' });
         }
         const committee = await Committee.findById(id);
         if (!committee) {
-            console.error('[suggestPeople] Committee not found for id:', id);
             return res.status(404).json({ message: 'Committee not found' });
         }
         // Only chairman can suggest
-        if (!committee.chairman || !committee.chairman.userId) {
-            console.error('[suggestPeople] Committee chairman missing or malformed:', committee.chairman);
-        }
         if (committee.chairman.userId.toString() !== req.user._id.toString()) {
-            console.error('[suggestPeople] User is not chairman:', { chairmanId: committee.chairman.userId, userId: req.user._id });
             return res.status(403).json({ message: 'Only chairman can suggest people' });
         }
         committee.suggestedConvener = suggestedConvener;
@@ -85,7 +77,7 @@ exports.suggestPeople = async (req, res) => {
         }
         res.status(200).json({ message: 'Suggestions sent to admin for approval.' });
     } catch (error) {
-        console.error('[suggestPeople] Exception:', error);
+        console.error('[suggestPeople] Exception:', error.message);
         res.status(400).json({ message: error.message });
     }
 };
@@ -193,19 +185,13 @@ exports.getCommitteeById = async (req, res) => {
         const committee = await Committee.findById(id);
         
         if (!committee) {
-            return res.status(404).json({ 
-                message: 'Committee not found',
-                receivedId: id 
-            });
+            return res.status(404).json({ message: 'Committee not found' });
         }
         
         res.status(200).json(committee);
     } catch (error) {
         console.error('Committee fetch error:', error);
-        res.status(500).json({ 
-            message: 'Server error while fetching committee',
-            error: error.message 
-        });
+        res.status(500).json({ message: 'Server error while fetching committee' });
     }
 };
 
@@ -245,8 +231,8 @@ exports.getCommitteeUsers = async (req, res) => {
         if (!committee) return res.status(404).json({ message: 'Committee not found' });
         // Compose all users: chairman, convener, and members
         const users = [
-            { name: committee.chairman.name, email: committee.chairman.email, role: 'chairman', _id: 'chairman' },
-            { name: committee.convener.name, email: committee.convener.email, role: 'convener', _id: 'convener' },
+            { name: committee.chairman?.name, email: committee.chairman?.email, role: 'chairman', _id: 'chairman' },
+            ...(committee.convener?.email ? [{ name: committee.convener.name, email: committee.convener.email, role: 'convener', _id: 'convener' }] : []),
             ...committee.members.map(m => ({ ...m.toObject(), role: m.role || 'member' }))
         ];
         res.json(users);
@@ -283,12 +269,10 @@ exports.removeUserFromCommittee = async (req, res) => {
         const committee = await Committee.findById(id);
         if (!committee) return res.status(404).json({ message: 'Committee not found' });
         if (userId === 'chairman') {
-            committee.chairman = { name: 'Removed', email: 'Removed' };
-            await committee.save();
-            return res.json({ message: 'Chairman removed from committee' });
+            return res.status(400).json({ message: 'Chairman cannot be removed. Assign a new chairman instead.' });
         }
         if (userId === 'convener') {
-            committee.convener = { name: 'Removed', email: 'Removed' };
+            committee.convener = undefined;
             await committee.save();
             return res.json({ message: 'Convener removed from committee' });
         }
@@ -308,13 +292,11 @@ exports.removeUserFromCommittee = async (req, res) => {
 exports.getCommitteesForUser = async (req, res) => {
     try {
         const { userId } = req.query;
-        console.log('getCommitteesForUser: received userId:', userId, 'type:', typeof userId);
         if (!userId) return res.status(400).json({ message: 'userId is required' });
         if (!mongoose.Types.ObjectId.isValid(userId)) {
             return res.status(400).json({ message: 'userId is not a valid ObjectId', received: userId });
         }
         const objectId = new mongoose.Types.ObjectId(userId); // FIXED: use 'new' keyword
-        console.log('Querying committees for userId:', objectId);
         const committees = await Committee.find({
             $or: [
                 { 'chairman.userId': objectId },
@@ -324,7 +306,7 @@ exports.getCommitteesForUser = async (req, res) => {
         });
         res.status(200).json(committees);
     } catch (error) {
-        console.error('Error in getCommitteesForUser:', error.stack || error);
-        res.status(500).json({ message: error.message, stack: error.stack });
+        console.error('Error in getCommitteesForUser:', error.message);
+        res.status(500).json({ message: 'Server error' });
     }
 };

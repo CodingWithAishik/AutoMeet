@@ -24,6 +24,7 @@ exports.requireCommitteeRole = (role) => async (req, res, next) => {
     }
     return res.status(403).json({ message: 'Forbidden: insufficient role for this action' });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('Committee role middleware error:', err.message);
+    return res.status(500).json({ message: 'Server error' });
   }
 };

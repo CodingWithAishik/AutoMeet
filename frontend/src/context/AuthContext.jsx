@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import PropTypes from 'prop-types';
 
 const AuthContext = createContext();
 
@@ -9,7 +10,7 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         if (token) {
-            axios.get('/api/auth/profile', {
+            axios.get(`${import.meta.env.VITE_BASE_URL}/users/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
             .then(response => {
@@ -40,4 +41,6 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
-export const useAuth = () => useContext(AuthContext);
+AuthProvider.propTypes = {
+    children: PropTypes.node.isRequired
+};

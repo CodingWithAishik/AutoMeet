@@ -1,7 +1,8 @@
 require('../models/user.model'); // Ensure User model is registered before any population
-const MinutesOfMeeting = require('../models/MinutesOfMeeting');
+const MinutesOfMeeting = require('../models/MInutesOfMeeting');
 const Suggestion = require('../models/suggestion.model');
 const Notification = require('../models/notification.model');
+const Committee = require('../models/committee.model');
 const { getUserIdsByEmails } = require('./user.controller');
 
 const createMinutes = async (req, res) => {
@@ -22,7 +23,7 @@ const createMinutes = async (req, res) => {
         });
         await minutes.save();
         // Notify all committee members (except the convener) about the new MoM
-        const committee = await require('../models/committee.model').findById(committeeId);
+        const committee = await Committee.findById(committeeId);
         if (committee) {
             // Exclude the convener (req.user.email) from notification recipients
             const allMemberEmails = [committee.chairman.email, ...committee.members.map(m => m.email)]
@@ -108,7 +109,7 @@ const addSuggestion = async (req, res) => {
         // Notify the convener of the committee for this meeting
         const mom = await MinutesOfMeeting.findById(meetingId);
         if (mom) {
-            const committee = await require('../models/committee.model').findById(mom.committeeId);
+            const committee = await Committee.findById(mom.committeeId);
             if (committee) {
                 const convenerEmail = committee.convener.email;
                 const convenerIdArr = await getUserIdsByEmails([convenerEmail]);
@@ -171,16 +172,12 @@ const getAllSuggestionsByCommittee = async (req, res) => {
 
 // Add this function to send notifications to users
 async function sendNotification(userIds, message, link = null) {
-    console.log('sendNotification: function called');
     if (!Array.isArray(userIds)) userIds = [userIds];
-    console.log('sendNotification: userIds:', userIds, 'message:', message, 'link:', link);
     if (!userIds.length) {
-        console.warn('sendNotification called with empty userIds');
         return;
     }
     const notifications = userIds.map(userId => ({ userId, message, link }));
-    const result = await Notification.insertMany(notifications);
-    console.log('sendNotification: notifications inserted:', result.length);
+    await Notification.insertMany(notifications);
 }
 
 module.exports = {

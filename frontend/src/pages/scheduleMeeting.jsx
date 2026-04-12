@@ -37,7 +37,7 @@ const ScheduleMeeting = () => {
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        const { title, date, startTime, description } = formData;
+        const { title, date, startTime } = formData;
         if (title && date && startTime) {
             try {
                 const token = localStorage.getItem('token');

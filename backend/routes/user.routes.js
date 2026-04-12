@@ -26,7 +26,7 @@ router.get('/profile', authMiddleware.authUser, userController.getUserProfile)
 router.get('/logout', authMiddleware.authUser, userController.logoutUser)
 
 router.put('/update-role/:id', authMiddleware.authUser, authMiddleware.isAdmin, [
-    body('role').isIn(['member', 'admin', 'chairman', 'convenor']).withMessage('Invalid role')
+    body('role').isIn(['admin', 'member']).withMessage('Invalid role')
 ], userController.updateUserRole);
 
 // Allow both admin and chairman to access all users
@@ -49,13 +49,11 @@ router.get('/users', authMiddleware.authUser, (req, res, next) => {
 router.get('/username', authMiddleware.authUser, userController.getUserNames);
 
 // Get user by email (for committee add)
-router.get('/by-email/:email', async (req, res) => {
+router.get('/by-email/:email', authMiddleware.authUser, async (req, res) => {
     try {
         const email = req.params.email.trim();
-        console.log('by-email route received:', email);
         // Use case-insensitive regex for robust search
         const user = await User.findOne({ email: { $regex: `^${email}$`, $options: 'i' } });
-        console.log('User found:', user);
         if (!user) return res.status(404).json({ message: 'User not found' });
         res.json(user);
     } catch (err) {
