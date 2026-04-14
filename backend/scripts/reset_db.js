@@ -6,7 +6,7 @@ const bcrypt = require('bcrypt');
 const User = require('../models/user.model');
 const Committee = require('../models/committee.model');
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/CS_2191';
+const MONGO_URI = process.env.MONGO_URI;
 
 async function resetDB() {
   try {
