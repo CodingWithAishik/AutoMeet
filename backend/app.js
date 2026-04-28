@@ -16,15 +16,31 @@ const meetingRoutes = require('./routes/meeting.routes');
 
 connectTodb();
 
-const allowedOrigins = new Set(
-    [
-        process.env.CORS_ORIGIN,
-        process.env.CORS_ORIGIN_SECONDARY,
-        'http://localhost:5173',
-        'http://localhost:3000'
-    ]
-        .filter(Boolean)
-        .map((origin) => origin.trim())
+// Helper: normalize configured origins. Accepts values with or without scheme,
+// supports comma-separated lists, and rejects obvious placeholder entries.
+const normalizeConfiguredOrigins = (...vals) => {
+    const out = new Set();
+    for (const v of vals.filter(Boolean)) {
+        // allow comma-separated lists in a single env var
+        for (const part of String(v).split(',')) {
+            const s = part.trim();
+            if (!s) continue;
+            const lower = s.toLowerCase();
+            // skip placeholder-like or obviously invalid tokens
+            if (lower.includes('placeholder') || lower.includes('[placeholder')) continue;
+            // If scheme present, keep as-is; else assume https
+            const normalized = /^(https?:)?\/\//i.test(s) ? s.replace(/\/+$/,'') : `https://${s.replace(/\/+$/,'')}`;
+            out.add(normalized);
+        }
+    }
+    return out;
+};
+
+const allowedOrigins = normalizeConfiguredOrigins(
+    process.env.CORS_ORIGIN,
+    process.env.CORS_ORIGIN_SECONDARY,
+    'localhost:5173',
+    'localhost:3000'
 );
 
 const isAllowedVercelOrigin = (origin) => {
@@ -55,13 +71,21 @@ app.use(rateLimit({
 
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin) {
-            return callback(null, true);
+        // Allow non-browser or same-origin requests (no Origin header)
+        if (!origin) return callback(null, true);
+
+        // First, allow Vercel preview hostnames using pattern matcher
+        if (isAllowedVercelOrigin(origin)) return callback(null, true);
+
+        // Normalize runtime origin for comparison
+        let runtimeOrigin;
+        try {
+            runtimeOrigin = new URL(origin).origin.replace(/\/+$/,'');
+        } catch (e) {
+            return callback(new Error(`Invalid origin header: ${origin}`));
         }
 
-        if (allowedOrigins.has(origin) || isAllowedVercelOrigin(origin)) {
-            return callback(null, true);
-        }
+        if (allowedOrigins.has(runtimeOrigin)) return callback(null, true);
 
         return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
@@ -82,25 +106,6 @@ app.use('/api/meetings', meetingRoutes);
 
 app.get('/' , (req,res) => {
     res.send('Hello world');
-});
-
-// Temporary debug endpoint — returns non-secret env values and request origin
-// Use this only for short-term debugging in deployments; remove before production
-app.get('/_debug/env', (req, res) => {
-    const info = {
-        env: {
-            CORS_ORIGIN: process.env.CORS_ORIGIN || null,
-            CORS_ORIGIN_SECONDARY: process.env.CORS_ORIGIN_SECONDARY || null,
-            NODE_ENV: process.env.NODE_ENV || null,
-            VERCEL_URL: process.env.VERCEL_URL || null
-        },
-        requestOrigin: req.get('origin') || null,
-        receivedHeaders: {
-            'x-vercel-id': req.get('x-vercel-id') || null
-        }
-    };
-
-    return res.json(info);
 });
 
 app.use((req, res) => {
