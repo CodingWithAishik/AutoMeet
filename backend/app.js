@@ -84,6 +84,25 @@ app.get('/' , (req,res) => {
     res.send('Hello world');
 });
 
+// Temporary debug endpoint — returns non-secret env values and request origin
+// Use this only for short-term debugging in deployments; remove before production
+app.get('/_debug/env', (req, res) => {
+    const info = {
+        env: {
+            CORS_ORIGIN: process.env.CORS_ORIGIN || null,
+            CORS_ORIGIN_SECONDARY: process.env.CORS_ORIGIN_SECONDARY || null,
+            NODE_ENV: process.env.NODE_ENV || null,
+            VERCEL_URL: process.env.VERCEL_URL || null
+        },
+        requestOrigin: req.get('origin') || null,
+        receivedHeaders: {
+            'x-vercel-id': req.get('x-vercel-id') || null
+        }
+    };
+
+    return res.json(info);
+});
+
 app.use((req, res) => {
     res.status(404).json({ message: 'Route not found' });
 });
