@@ -16,6 +16,33 @@ const meetingRoutes = require('./routes/meeting.routes');
 
 connectTodb();
 
+const allowedOrigins = new Set(
+    [
+        process.env.CORS_ORIGIN,
+        process.env.CORS_ORIGIN_SECONDARY,
+        'http://localhost:5173',
+        'http://localhost:3000'
+    ]
+        .filter(Boolean)
+        .map((origin) => origin.trim())
+);
+
+const isAllowedVercelOrigin = (origin) => {
+    if (!origin) return false;
+
+    try {
+        const { hostname, protocol } = new URL(origin);
+        if (protocol !== 'https:') return false;
+
+        return (
+            hostname === 'automeet-frontend.vercel.app' ||
+            hostname.startsWith('automeet-frontend-') && hostname.endsWith('.vercel.app')
+        );
+    } catch {
+        return false;
+    }
+};
+
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(rateLimit({
@@ -27,7 +54,17 @@ app.use(rateLimit({
 }));
 
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: (origin, callback) => {
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        if (allowedOrigins.has(origin) || isAllowedVercelOrigin(origin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']

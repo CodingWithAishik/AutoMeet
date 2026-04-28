@@ -11,11 +11,11 @@ const User = require('../models/user.model');
 
 const MONGO_URI = process.env.MONGO_URI || process.env.DB_CONNECT;
 
-// Hardcoded bootstrap admin credentials (change before running in production).
-const ADMIN_EMAIL = 'admin@cs2191.com';
-const ADMIN_PASSWORD = 'yoohooo';
-const ADMIN_FIRST_NAME = 'Admin';
-const ADMIN_LAST_NAME = 'User';
+// Bootstrap admin credentials from environment variables.
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@cs2191.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const ADMIN_FIRST_NAME = process.env.ADMIN_FIRST_NAME || 'Admin';
+const ADMIN_LAST_NAME = process.env.ADMIN_LAST_NAME || 'User';
 
 async function seedAdmin() {
   if (!MONGO_URI) {
@@ -23,8 +23,13 @@ async function seedAdmin() {
     process.exit(1);
   }
 
+  if (!ADMIN_PASSWORD) {
+    console.error('Missing ADMIN_PASSWORD. Set ADMIN_PASSWORD before running.');
+    process.exit(1);
+  }
+
   try {
-    await mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await mongoose.connect(MONGO_URI);
     console.log('Connected to MongoDB');
 
     const existingAdmin = await User.findOne({ email: ADMIN_EMAIL });
