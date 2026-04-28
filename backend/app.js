@@ -60,6 +60,7 @@ const isAllowedVercelOrigin = (origin) => {
 };
 
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(rateLimit({
     windowMs: 15 * 60 * 1000,
