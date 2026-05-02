@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import styles from '../styles/LoginPage.module.css';
 import { UserDataContext } from '../context/UserDataContext';
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 
 function LoginPage() {
   const [email, setEmail] = useState('');
@@ -26,7 +27,7 @@ function LoginPage() {
 
     try {
       const response = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/users/login`,
+        `${apiBaseUrl}/users/login`,
         userData
       );
 

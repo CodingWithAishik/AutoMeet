@@ -6,6 +6,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import styles from "../styles/scheduleMeeting.module.css";
 import Sidebar from '../components/Sidebar';
 import axios from "axios";
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 
 const localizer = momentLocalizer(moment);
 
@@ -26,7 +27,7 @@ const ScheduledMeetingsCalendar = () => {
             try {
                 const token = localStorage.getItem("token");
                 const response = await axios.get(
-                    `${import.meta.env.VITE_BASE_URL}/api/meetings/committee/${committeeId}`,
+                    `${apiBaseUrl}/api/meetings/committee/${committeeId}`,
                     {
                         headers: {
                             Authorization: `Bearer ${token}`,

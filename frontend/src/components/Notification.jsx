@@ -2,6 +2,7 @@ import { useEffect, useState, useContext } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { UserDataContext } from '../context/UserDataContext';
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 
 const NotificationList = () => {
   const { user } = useContext(UserDataContext);
@@ -13,7 +14,7 @@ const NotificationList = () => {
     const fetchNotifications = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/notifications`, {
+        const res = await axios.get(`${apiBaseUrl}/api/notifications`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',

@@ -2,6 +2,7 @@ import { useState, useContext, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { UserDataContext } from '../context/UserDataContext';
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 
 import styles from '../styles/home.module.css';
 
@@ -14,7 +15,7 @@ const Home = () => {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('token'); // Fetch token from localStorage
-      const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/notifications`, {
+      const response = await axios.get(`${apiBaseUrl}/api/notifications`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -126,7 +127,7 @@ const Home = () => {
                           if (!noti.isRead) {
                             try {
                               const token = localStorage.getItem('token');
-                              await axios.put(`${import.meta.env.VITE_BASE_URL}/api/notifications/${noti._id}/read`, {}, {
+                              await axios.put(`${apiBaseUrl}/api/notifications/${noti._id}/read`, {}, {
                                 headers: { Authorization: `Bearer ${token}` }
                               });
                               setNotifications((prev) => prev.map(n => n._id === noti._id ? { ...n, isRead: true } : n));

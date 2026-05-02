@@ -3,6 +3,7 @@ import PropTypes from 'prop-types'
 import { UserDataContext } from '../context/UserDataContext'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { apiBaseUrl } from '../utils/apiBaseUrl'
 
 const UserProtectWrapper = ({
     children
@@ -17,7 +18,7 @@ const UserProtectWrapper = ({
             navigate('/login')
         }
 
-        axios.get(`${import.meta.env.VITE_BASE_URL}/users/profile`, {
+        axios.get(`${apiBaseUrl}/users/profile`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }

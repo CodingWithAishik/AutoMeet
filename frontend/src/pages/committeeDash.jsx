@@ -5,6 +5,7 @@ import { jsPDF } from "jspdf";
 import "../styles/committeeDash.css";
 import { UserDataContext } from '../context/UserDataContext';
 import React from "react";
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 
 function CommitteeDashboard() {
     // Chairman suggest people UI state (must be inside component)
@@ -61,7 +62,7 @@ function CommitteeDashboard() {
             };
             console.log('[SuggestPeople] payload to submit:', payload);
             await axios.post(
-                `${import.meta.env.VITE_BASE_URL}/api/committees/${id}/suggest-people`,
+                `${apiBaseUrl}/api/committees/${id}/suggest-people`,
                 payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -95,7 +96,7 @@ function CommitteeDashboard() {
             };
             
             await axios.post(
-                `${import.meta.env.VITE_BASE_URL}/api/committees/${id}/approve-suggestions`,
+                `${apiBaseUrl}/api/committees/${id}/approve-suggestions`,
                 payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -177,7 +178,7 @@ function CommitteeDashboard() {
             const fetchUsers = async () => {
                 try {
                     const token = localStorage.getItem('token');
-                    const res = await axios.get(`${import.meta.env.VITE_BASE_URL}/users/users`, {
+                    const res = await axios.get(`${apiBaseUrl}/users/users`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setAllUsers(res.data);
@@ -195,7 +196,7 @@ function CommitteeDashboard() {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get(
-                `${import.meta.env.VITE_BASE_URL}/api/minutes/committee/${id}`,
+                `${apiBaseUrl}/api/minutes/committee/${id}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -225,7 +226,7 @@ function CommitteeDashboard() {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get(
-                `${import.meta.env.VITE_BASE_URL}/api/committees/${id}`,
+                `${apiBaseUrl}/api/committees/${id}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -297,7 +298,7 @@ function CommitteeDashboard() {
             return;
         }
         await axios.put(
-            `${import.meta.env.VITE_BASE_URL}/api/minutes/${meeting._id}`,
+            `${apiBaseUrl}/api/minutes/${meeting._id}`,
             {
                 topic: meeting.topic,
                 date: formattedDate,
@@ -329,7 +330,7 @@ function CommitteeDashboard() {
         try {
             const token = localStorage.getItem("token");
             await axios.post(
-                `${import.meta.env.VITE_BASE_URL}/api/minutes/create`,
+                `${apiBaseUrl}/api/minutes/create`,
                 {
                     committeeId: id,
                     topic: newMoMTopic,
@@ -367,7 +368,7 @@ function CommitteeDashboard() {
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                `${import.meta.env.VITE_BASE_URL}/api/minutes/ai-draft`,
+                `${apiBaseUrl}/api/minutes/ai-draft`,
                 {
                     committeeId: id,
                     topic: newMoMTopic,
@@ -406,7 +407,7 @@ function CommitteeDashboard() {
         try {
             const token = localStorage.getItem('token');
             await axios.delete(
-                `${import.meta.env.VITE_BASE_URL}/api/committees/${id}`,
+                `${apiBaseUrl}/api/committees/${id}`,
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -434,7 +435,7 @@ function CommitteeDashboard() {
         try {
             const token = localStorage.getItem('token');
             await axios.post(
-                `${import.meta.env.VITE_BASE_URL}/api/minutes/${meetingId}/suggestions`,
+                `${apiBaseUrl}/api/minutes/${meetingId}/suggestions`,
                 {
                     userId: user._id,
                     suggestion: suggestionText.trim()
@@ -467,7 +468,7 @@ function CommitteeDashboard() {
                 try {
                     const token = localStorage.getItem('token');
                     const res = await axios.get(
-                        `${import.meta.env.VITE_BASE_URL}/api/minutes/committee/${id}/suggestions`,
+                        `${apiBaseUrl}/api/minutes/committee/${id}/suggestions`,
                         {
                             headers: {
                                 Authorization: `Bearer ${token}`,

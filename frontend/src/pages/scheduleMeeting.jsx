@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar';
 import { useParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { UserDataContext } from '../context/UserDataContext';
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 
 const ScheduleMeeting = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -42,7 +43,7 @@ const ScheduleMeeting = () => {
             try {
                 const token = localStorage.getItem('token');
                 await axios.post(
-                    `${import.meta.env.VITE_BASE_URL}/api/meetings/schedule`,
+                    `${apiBaseUrl}/api/meetings/schedule`,
                     {
                         committeeId,
                         topic: title,
@@ -81,7 +82,7 @@ const ScheduleMeeting = () => {
             try {
                 const token = localStorage.getItem('token');
                 const response = await axios.get(
-                    `${import.meta.env.VITE_BASE_URL}/api/committees/${committeeId}`,
+                    `${apiBaseUrl}/api/committees/${committeeId}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 setCommittee(response.data);

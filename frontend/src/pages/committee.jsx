@@ -6,6 +6,7 @@ import { UserDataContext } from '../context/UserDataContext';
 import CommitteeForm from '../components/CommitteeForm';
 import Sidebar from '../components/Sidebar';
 import CommitteeList from '../components/CommitteeList';
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 
 const CommitteeApp = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -28,12 +29,12 @@ const CommitteeApp = () => {
         let response;
         if (user?.status === 'admin') {
           // Admin: fetch all committees
-          response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/committees`, {
+          response = await axios.get(`${apiBaseUrl}/api/committees`, {
             headers: { Authorization: `Bearer ${token}` },
           });
         } else if (user && typeof user._id === 'string' && user._id.length === 24) {
           // Non-admin: fetch only their committees
-          response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/committees/user?userId=${user._id}`, {
+          response = await axios.get(`${apiBaseUrl}/api/committees/user?userId=${user._id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
         } else {
@@ -58,7 +59,7 @@ const CommitteeApp = () => {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/users/users`, {
+      const response = await axios.get(`${apiBaseUrl}/users/users`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -97,7 +98,7 @@ const CommitteeApp = () => {
       };
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/api/committees/create`,
+        `${apiBaseUrl}/api/committees/create`,
         payload,
         {
           headers: {

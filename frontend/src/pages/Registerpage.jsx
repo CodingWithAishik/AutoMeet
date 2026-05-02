@@ -2,6 +2,7 @@ import { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { UserDataContext } from '../context/UserDataContext';
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 import styles from '../styles/RegisterPage.module.css'; // Optional for custom styling
 
 function RegisterPage() {
@@ -48,7 +49,7 @@ function RegisterPage() {
 
     try {
       const response = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/users/register`,
+        `${apiBaseUrl}/users/register`,
         newUser
       );
 

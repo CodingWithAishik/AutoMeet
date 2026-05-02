@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
+import { apiBaseUrl } from '../utils/apiBaseUrl'
 
 export const UserLogout = () => {
 
@@ -8,7 +9,7 @@ export const UserLogout = () => {
     const navigate = useNavigate()
 
     useEffect(() => {
-        axios.get(`${import.meta.env.VITE_BASE_URL}/users/logout`, {
+        axios.get(`${apiBaseUrl}/users/logout`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }

@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import PropTypes from 'prop-types';
+import { apiBaseUrl } from '../utils/apiBaseUrl';
 
 const AuthContext = createContext();
 
@@ -10,7 +11,7 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         if (token) {
-            axios.get(`${import.meta.env.VITE_BASE_URL}/users/profile`, {
+            axios.get(`${apiBaseUrl}/users/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
             .then(response => {
