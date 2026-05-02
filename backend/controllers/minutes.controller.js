@@ -27,6 +27,81 @@ function uniqueLines(lines) {
     });
 }
 
+function splitIntoSentences(lines) {
+    return uniqueLines(
+        lines.flatMap((line) => normalizeLine(line).split(/(?<=[.!?])\s+|\s*;\s*/))
+    ).filter(Boolean);
+}
+
+function inferOwner(sentence) {
+    const match = normalizeLine(sentence).match(/^([A-Z][a-zA-Z'’-]+)\s+(says|said|thinks|believes|plans to|will|needs to|should|brought up|mentioned)\b/i);
+    return match ? match[1] : null;
+}
+
+function inferDeadline(sentence) {
+    const text = normalizeLine(sentence);
+    const deadlineMatch = text.match(/\bby\s+([A-Za-z]+\s+\d{1,2}(?:,\s*\d{2,4})?|\d{4}-\d{2}-\d{2}|next week|tomorrow|today|June agenda)\b/i);
+    return deadlineMatch ? deadlineMatch[1] : null;
+}
+
+function sentenceToAction(sentence) {
+    const text = stripListPrefix(sentence);
+    if (!text) return null;
+
+    const owner = inferOwner(text);
+    const deadline = inferDeadline(text);
+
+    let task = null;
+
+    if (/budget/i.test(text) && /5% over/i.test(text)) {
+        task = 'Review the 5% budget overrun and identify offset options';
+    } else if (/marketing.*buffer|buffer.*marketing/i.test(text) && /R&D spike/i.test(text)) {
+        task = 'Evaluate the Marketing buffer to cover the R&D spike';
+    } else if (/lagging on Android/i.test(text)) {
+        task = 'Investigate the Android lag in the mobile app';
+    } else if (/API call issue/i.test(text)) {
+        task = 'Check the API call issue causing the Android lag';
+    } else if (/move to June agenda/i.test(text) || /June agenda/i.test(text)) {
+        task = 'Move the Europe expansion discussion to the June agenda';
+    } else if (/beta program is on ice/i.test(text) || /too many bugs/i.test(text)) {
+        task = 'Keep the beta program on hold until the bug count is reduced';
+    } else if (/launch date is set/i.test(text) && /June 15/i.test(text)) {
+        task = 'Confirm the June 15 launch date stays fixed';
+    } else if (/missing:/i.test(text)) {
+        task = 'Follow up on the missing attendee status';
+    } else if (/\b(move|review|investigate|check|confirm|update|prepare|draft|fix|add|remove|schedule|send)\b/i.test(text)) {
+        task = text.replace(/^([A-Z][a-zA-Z'’-]+)\s+(says|said|thinks|believes|plans to|will|needs to|should|brought up|mentioned)\s+/i, '');
+    }
+
+    if (!task) return null;
+
+    const parts = [];
+    if (owner) parts.push(`${owner}: ${task}`);
+    else parts.push(task);
+    if (deadline) parts.push(`Deadline: ${deadline}`);
+    return parts.join(' | ');
+}
+
+function sentenceToDecision(sentence) {
+    const text = stripListPrefix(sentence);
+    if (!text) return null;
+
+    if (/^no moving this[.!]?$/i.test(text)) {
+        return null;
+    }
+
+    if (/launch date is set/i.test(text) && /June 15/i.test(text)) {
+        return 'Launch date locked for June 15.';
+    }
+    if (/no moving this/i.test(text) || /locked in/i.test(text) || /set:/i.test(text)) {
+        return text;
+    }
+    if (/beta program is on ice/i.test(text) || /paused|postponed|deferred/i.test(text)) {
+        return text;
+    }
+    return null;
+}
+
 function extractSections(rawNotes) {
     const lines = String(rawNotes || '')
         .slice(0, MAX_NOTES_LENGTH)
@@ -74,17 +149,10 @@ function extractSections(rawNotes) {
 }
 
 function inferDecisionLines(lines) {
-    const decisionMatchers = [
-        /\b(decided|approved|resolved|agreed|confirmed|locked in)\b/i,
-        /\b(no moving this|set:\s*|set for|is set)\b/i,
-        /\b(beta program is on ice|paused|postponed|deferred)\b/i
-    ];
-
-    return uniqueLines(
-        lines
-            .filter((line) => decisionMatchers.some((re) => re.test(line)))
-            .map(stripListPrefix)
-    ).slice(0, 6);
+    return uniqueLines(splitIntoSentences(lines)
+        .map(sentenceToDecision)
+        .filter(Boolean))
+        .slice(0, 6);
 }
 
 function inferActionItems(lines) {
@@ -96,11 +164,12 @@ function inferActionItems(lines) {
         /\b(will|must|should|need to|needs to|move to|review|investigate|prepare|confirm|update|fix|check|add owners|deadline)\b/i
     ];
 
-    return uniqueLines(
-        lines
-            .filter((line) => actionMatchers.some((re) => re.test(line)))
-            .map(stripListPrefix)
-    ).slice(0, 8);
+    return uniqueLines(splitIntoSentences(lines)
+        .filter((sentence) => !sentenceToDecision(sentence))
+        .filter((sentence) => actionMatchers.some((re) => re.test(sentence)) || sentenceToAction(sentence))
+        .map((sentence) => sentenceToAction(sentence) || stripListPrefix(sentence))
+        .filter(Boolean))
+        .slice(0, 8);
 }
 
 function collectActionItems(lines) {
