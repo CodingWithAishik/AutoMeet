@@ -11,35 +11,125 @@ function normalizeLine(line) {
     return String(line || '').replace(/\s+/g, ' ').trim();
 }
 
-function collectActionItems(lines) {
-    const actionPrefixes = [/^todo[:\-]?\s*/i, /^action[:\-]?\s*/i, /^ai[:\-]?\s*/i, /^follow[- ]?up[:\-]?\s*/i];
-    return lines
-        .filter((line) => actionPrefixes.some((re) => re.test(line)) || /\b(will|must|should|by\s+\d{4}-\d{2}-\d{2})\b/i.test(line))
-        .slice(0, 8)
-        .map((line, idx) => `${idx + 1}. ${line.replace(/^[-*\d.\s]+/, '')}`);
+function stripListPrefix(line) {
+    return String(line || '').replace(/^[-*\d.\s]+/, '').trim();
 }
 
-function collectDecisions(lines) {
-    return lines
-        .filter((line) => /\b(decided|approved|resolved|agreed)\b/i.test(line))
-        .slice(0, 6)
-        .map((line, idx) => `${idx + 1}. ${line.replace(/^[-*\d.\s]+/, '')}`);
+function uniqueLines(lines) {
+    const seen = new Set();
+    return lines.filter((line) => {
+        const key = normalizeLine(line).toLowerCase();
+        if (!key || seen.has(key)) {
+            return false;
+        }
+        seen.add(key);
+        return true;
+    });
 }
 
-function buildDraft({ topic, date, time, rawNotes }) {
-    const cleaned = String(rawNotes || '').slice(0, MAX_NOTES_LENGTH);
-    const lines = cleaned
+function extractSections(rawNotes) {
+    const lines = String(rawNotes || '')
+        .slice(0, MAX_NOTES_LENGTH)
         .split(/\r?\n/)
         .map(normalizeLine)
         .filter(Boolean);
 
-    const summaryCandidates = lines.slice(0, 3);
-    const decisions = collectDecisions(lines);
-    const actionItems = collectActionItems(lines);
+    const sections = {
+        summary: [],
+        discussions: [],
+        decisions: [],
+        actions: [],
+        notes: []
+    };
 
-    const discussion = lines
-        .slice(0, 10)
-        .map((line, idx) => `${idx + 1}. ${line.replace(/^[-*\d.\s]+/, '')}`);
+    const headingMatchers = [
+        { key: 'summary', re: /^summary\s*:?\s*$/i },
+        { key: 'discussions', re: /^(key discussions|discussion|discussions)\s*:?\s*$/i },
+        { key: 'decisions', re: /^decisions?\s*:?\s*$/i },
+        { key: 'actions', re: /^(action items?|stuff to do|tasks?)\s*:?\s*$/i },
+        { key: 'notes', re: /^notes?\s*:?\s*$/i }
+    ];
+
+    let currentSection = null;
+
+    for (const line of lines) {
+        const candidate = stripListPrefix(line);
+        const heading = headingMatchers.find(({ re }) => re.test(candidate));
+        if (heading) {
+            currentSection = heading.key;
+            continue;
+        }
+
+        const item = candidate;
+        if (!item) continue;
+
+        if (currentSection) {
+            sections[currentSection].push(item);
+        } else {
+            sections.notes.push(item);
+        }
+    }
+
+    return { lines, sections };
+}
+
+function inferDecisionLines(lines) {
+    const decisionMatchers = [
+        /\b(decided|approved|resolved|agreed|confirmed|locked in)\b/i,
+        /\b(no moving this|set:\s*|set for|is set)\b/i,
+        /\b(beta program is on ice|paused|postponed|deferred)\b/i
+    ];
+
+    return uniqueLines(
+        lines
+            .filter((line) => decisionMatchers.some((re) => re.test(line)))
+            .map(stripListPrefix)
+    ).slice(0, 6);
+}
+
+function inferActionItems(lines) {
+    const actionMatchers = [
+        /^todo[:\-]?\s*/i,
+        /^action[:\-]?\s*/i,
+        /^ai[:\-]?\s*/i,
+        /^follow[- ]?up[:\-]?\s*/i,
+        /\b(will|must|should|need to|needs to|move to|review|investigate|prepare|confirm|update|fix|check|add owners|deadline)\b/i
+    ];
+
+    return uniqueLines(
+        lines
+            .filter((line) => actionMatchers.some((re) => re.test(line)))
+            .map(stripListPrefix)
+    ).slice(0, 8);
+}
+
+function collectActionItems(lines) {
+    return inferActionItems(lines).map((line, idx) => `${idx + 1}. ${line}`);
+}
+
+function collectDecisions(lines) {
+    return inferDecisionLines(lines).map((line, idx) => `${idx + 1}. ${line}`);
+}
+
+function buildDraft({ topic, date, time, rawNotes }) {
+    const { lines, sections } = extractSections(rawNotes);
+    const summaryCandidates = uniqueLines(sections.summary.length ? sections.summary : lines.slice(0, 3)).slice(0, 3);
+    const summaryKeySet = new Set(summaryCandidates.map((line) => normalizeLine(line).toLowerCase()));
+    const cleanedDiscussionSource = sections.discussions.filter((line) => !summaryKeySet.has(normalizeLine(line).toLowerCase()));
+    const fallbackDiscussionSource = uniqueLines([...sections.discussions, ...sections.notes])
+        .filter((line) => !summaryKeySet.has(normalizeLine(line).toLowerCase()));
+    const discussionSource = cleanedDiscussionSource.length >= 4
+        ? cleanedDiscussionSource
+        : fallbackDiscussionSource.length
+            ? fallbackDiscussionSource
+            : lines.filter((line) => !/^(summary|key discussions|discussion|discussions|decisions?|action items?|stuff to do|tasks?|notes?)\s*:?\s*$/i.test(line));
+    const discussion = uniqueLines(discussionSource).slice(0, 10).map((line, idx) => `${idx + 1}. ${stripListPrefix(line)}`);
+
+    const decisionSource = sections.decisions.length ? sections.decisions : lines;
+    const decisions = collectDecisions(decisionSource);
+
+    const actionSource = sections.actions.length ? sections.actions : lines;
+    const actionItems = collectActionItems(actionSource);
 
     return [
         `Topic: ${topic}`,
@@ -47,7 +137,7 @@ function buildDraft({ topic, date, time, rawNotes }) {
         `Time: ${time}`,
         '',
         'Summary:',
-        summaryCandidates.length ? summaryCandidates.map((line, idx) => `${idx + 1}. ${line}`).join('\n') : '1. Summary to be added.',
+        summaryCandidates.length ? summaryCandidates.map((line, idx) => `${idx + 1}. ${stripListPrefix(line)}`).join('\n') : '1. Summary to be added.',
         '',
         'Key Discussions:',
         discussion.length ? discussion.join('\n') : '1. Key discussion points to be added.',
@@ -272,5 +362,6 @@ module.exports = {
     deleteSuggestion,
     sendNotification,
     getAllSuggestionsByCommittee,
-    generateMinutesDraft
+    generateMinutesDraft,
+    buildDraft
 };
