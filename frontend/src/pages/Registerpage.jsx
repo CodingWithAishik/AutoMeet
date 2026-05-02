@@ -61,8 +61,8 @@ function RegisterPage() {
         setTimeout(() => navigate('/home'), 500); // Redirect after 2 seconds
       }
     } catch (error) {
-      const errorResponse =
-        error.response?.data?.message || 'Something went wrong!';
+      const data = error.response?.data;
+      const errorResponse = data?.message || (Array.isArray(data?.errors) ? data.errors.map(e => e.msg).join(', ') : 'Something went wrong!');
       setErrorMessage(errorResponse);
     }
   };
