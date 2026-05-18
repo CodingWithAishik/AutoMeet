@@ -9,9 +9,16 @@ const NotificationList = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const currentUserId = user?._id ? String(user._id) : null;
 
   useEffect(() => {
     const fetchNotifications = async () => {
+      if (!currentUserId) {
+        setNotifications([]);
+        setLoading(false);
+        return;
+      }
+
       try {
         const token = localStorage.getItem('token');
         const res = await axios.get(`${apiBaseUrl}/api/notifications`, {
@@ -20,15 +27,18 @@ const NotificationList = () => {
             'Content-Type': 'application/json',
           },
         });
-        setNotifications(res.data || []);
+        const scopedNotifications = Array.isArray(res.data)
+          ? res.data.filter((notification) => String(notification.userId) === currentUserId)
+          : [];
+        setNotifications(scopedNotifications);
       } catch {
         setNotifications([]);
       } finally {
         setLoading(false);
       }
     };
-    if (user?._id) fetchNotifications();
-  }, [user]);
+    fetchNotifications();
+  }, [currentUserId]);
 
   const handleNotificationClick = (notification) => {
     if (notification.link) {

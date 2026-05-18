@@ -10,7 +10,11 @@ router.use(authUser);
 // Get all notifications for the logged-in user
 router.get('/', async (req, res) => {
     try {
+        const userId = String(req.user._id);
         let notifications = await Notification.find({ userId: req.user._id }).sort({ createdAt: -1 });
+
+        notifications = notifications.filter((notification) => String(notification.userId) === userId);
+
         // Filter out notifications for deleted committees
         const committeeLinks = notifications
             .map(n => n.link)

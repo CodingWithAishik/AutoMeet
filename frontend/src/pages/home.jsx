@@ -10,9 +10,15 @@ const Home = () => {
   const { user } = useContext(UserDataContext); // Fetch user data from context
   const [notifications, setNotifications] = useState([]);
   const [showNotis, setShowNotis] = useState(false);
+  const currentUserId = user?._id ? String(user._id) : null;
 
   // Fetch notifications from API
   const fetchNotifications = async () => {
+    if (!currentUserId) {
+      setNotifications([]);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token'); // Fetch token from localStorage
       const response = await axios.get(`${apiBaseUrl}/api/notifications`, {
@@ -20,7 +26,10 @@ const Home = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      setNotifications(response.data);
+      const scopedNotifications = Array.isArray(response.data)
+        ? response.data.filter((notification) => String(notification.userId) === currentUserId)
+        : [];
+      setNotifications(scopedNotifications);
     } catch {
       setNotifications([]);
     }
@@ -28,7 +37,7 @@ const Home = () => {
 
   useEffect(() => {
     fetchNotifications();
-  }, []);
+  }, [currentUserId]);
 
   const handleNotificationClick = () => {
     setShowNotis(!showNotis);
